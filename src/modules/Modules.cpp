@@ -81,6 +81,8 @@
 #endif
 #endif
 
+#include "modules/NaraModule.h"
+
 #if !MESHTASTIC_EXCLUDE_DROPZONE
 #include "modules/DropzoneModule.h"
 #endif
@@ -136,6 +138,7 @@ void setupModules()
 #endif
         // Example: Put your module here
         // new ReplyModule();
+        new NaraModule();
 #if (HAS_BUTTON || ARCH_PORTDUINO) && !MESHTASTIC_EXCLUDE_INPUTBROKER
         rotaryEncoderInterruptImpl1 = new RotaryEncoderInterruptImpl1();
         if (!rotaryEncoderInterruptImpl1->init()) {
