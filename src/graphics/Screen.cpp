@@ -1151,9 +1151,58 @@ static void drawGPS(OLEDDisplay *display, int16_t x, int16_t y, const GPSStatus 
     }
 }
 
+// Draw nara status in lieu of GPS status
+static void drawNaraStatus(OLEDDisplay *display, int16_t x, int16_t y)
+{
+    int nodeCount = 0;
+
+    for (int i = 0; i < nodeDB->getNumMeshNodes(); i++) {
+      meshtastic_NodeInfoLite* node = nodeDB->getMeshNodeByIndex(i);
+      if (sinceLastSeen(node) < (30 * 60)) { // seen in the last half hour
+        nodeCount++;
+      }
+    }
+
+    LOG_DEBUG("[NARA] nodeCount=%u\n", nodeCount);
+
+    // Determine the message based on the node count
+    String message;
+
+    String displayLine;
+    int pos;
+    if (y < FONT_HEIGHT_SMALL) { // Line 1: use short string
+        if (nodeCount <= 2) {
+          displayLine = ":/";
+        } else if (nodeCount <= 5) {
+          displayLine = ":)";
+        } else if (nodeCount <= 9) {
+          displayLine = ":D";
+        } else {
+          displayLine = "xD";
+        }
+        pos = SCREEN_WIDTH - display->getStringWidth(displayLine);
+    } else {
+        if (nodeCount <= 2) {
+          displayLine = "[nara] it's quiet here...";
+        } else if (nodeCount <= 5) {
+          displayLine = "[nara] oh, hello there";
+        } else if (nodeCount <= 9) {
+          displayLine = "[nara] let's get this party started!";
+        } else {
+          displayLine = "[nara] EVERYONE IS HERE";
+        }
+        pos = (SCREEN_WIDTH - display->getStringWidth(displayLine)) / 2;
+    }
+    display->drawString(x + pos, y, displayLine);
+}
+
 // Draw status when GPS is disabled or not present
 static void drawGPSpowerstat(OLEDDisplay *display, int16_t x, int16_t y, const GPSStatus *gps)
 {
+    // TODO add constant to only do this on nara mode or something
+    drawNaraStatus(display, x, y);
+    return;
+
     String displayLine;
     int pos;
     if (y < FONT_HEIGHT_SMALL) { // Line 1: use short string
@@ -2093,9 +2142,10 @@ void Screen::setFrames(FrameFocus focus)
 
     // then all the nodes
     // We only show a few nodes in our scrolling list - because meshes with many nodes would have too many screens
-    size_t numToShow = min(numMeshNodes, 4U);
-    for (size_t i = 0; i < numToShow; i++)
-        normalFrames[numframes++] = drawNodeInfo;
+    // TODO: use ifdef to disable this in case of nara instead
+    /* size_t numToShow = min(numMeshNodes, 4U); */
+    /* for (size_t i = 0; i < numToShow; i++) */
+    /*     normalFrames[numframes++] = drawNodeInfo; */
 
     // then the debug info
     //
