@@ -7,6 +7,7 @@
 /**
  * A simple example module that just replies with "Message received" to any message it receives.
  */
+
 class NaraModule : private concurrency::OSThread, public SinglePortModule
 {
   public:
@@ -22,6 +23,10 @@ class NaraModule : private concurrency::OSThread, public SinglePortModule
     virtual void drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y) override;
 #endif
 
+    String getNaraMessage(int16_t y);
+    String getShortMessage();
+    String getClosestNodeNames(int maxNodes);
+
   protected:
     bool firstTime = 1;
     /** For reply module we do all of our processing in the (normally optional)
@@ -29,4 +34,11 @@ class NaraModule : private concurrency::OSThread, public SinglePortModule
      */
     virtual meshtastic_MeshPacket *allocReply() override;
     virtual int32_t runOnce() override;
+
+    int nodeCount = 0;
+
+    void updateNodeCount();
+    String getLongMessage();
 };
+
+extern NaraModule *naraModule;
