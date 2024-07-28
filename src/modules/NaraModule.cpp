@@ -10,7 +10,8 @@
 NaraModule *naraModule;
 
 #define NUM_ONLINE_SECS (60 * 60 * 2) // 2 hours to consider someone online
-#define MAX_CLOSEST_NODES 3           // Maximum number of closest nodes to display
+#define MAX_LINE_LENGTH 26            // Maximum characters per line
+#define MAX_CLOSEST_NODES 4           // Maximum number of closest nodes to display
 
 meshtastic_MeshPacket *NaraModule::allocReply()
 {
@@ -40,8 +41,19 @@ void NaraModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int1
   y += _fontHeight(FONT_MEDIUM);
   display->setFont(FONT_SMALL);
   display->drawString(x, y, getNaraMessage(y));
+
+  String closestNodes = getClosestNodeNames(MAX_CLOSEST_NODES);
+  int splitIndex = closestNodes.indexOf('\n');
+
   y += _fontHeight(FONT_SMALL);
-  display->drawString(x, y, getClosestNodeNames(MAX_CLOSEST_NODES));
+  if (splitIndex != -1) {
+    display->drawString(x, y, closestNodes.substring(0, splitIndex));
+    y += _fontHeight(FONT_SMALL);
+    display->drawString(x, y, closestNodes.substring(splitIndex + 1));
+  } else {
+    display->drawString(x, y, closestNodes);
+  }
+
   return;
 }
 
@@ -62,48 +74,79 @@ int32_t NaraModule::runOnce()
   // Update node count
   updateNodeCount();
 
-  return 60 * 1000; // run again in 60 seconds
+  return 10 * 1000; // run again in 10 seconds
 }
 
 void NaraModule::updateNodeCount()
 {
-  nodeCount = nodeDB->getNumOnlineMeshNodes(false);
+  nodeCount = 0;
+  NodeNum localNodeNum = nodeDB->getNodeNum();
+
+  for (int i = 0; i < nodeDB->getNumMeshNodes(); i++) {
+    meshtastic_NodeInfoLite* node = nodeDB->getMeshNodeByIndex(i);
+
+    if (!node->has_user) continue;
+    if (strcmp(node->user.long_name, "") == 0) continue;
+
+    if (node->num != localNodeNum && sinceLastSeen(node) < NUM_ONLINE_SECS && !node->via_mqtt) {
+      nodeCount++;
+    }
+  }
+
   LOG_DEBUG("[NARA] nodeCount=%u\n", nodeCount);
 }
 
 String NaraModule::getClosestNodeNames(int maxNodes)
 {
-  std::vector<std::pair<int, meshtastic_NodeInfoLite*>> nodeList;
-  NodeNum localNodeNum = nodeDB->getNodeNum();
+    std::vector<std::pair<int, meshtastic_NodeInfoLite*>> nodeList;
+    NodeNum localNodeNum = nodeDB->getNodeNum();
 
-  for (int i = 0; i < nodeDB->getNumMeshNodes(); i++) {
-    meshtastic_NodeInfoLite* node = nodeDB->getMeshNodeByIndex(i);
-    if (node->num != localNodeNum && sinceLastSeen(node) < NUM_ONLINE_SECS && !node->via_mqtt) {
-      nodeList.emplace_back(node->snr, node);
+    for (int i = 0; i < nodeDB->getNumMeshNodes(); i++) {
+        meshtastic_NodeInfoLite* node = nodeDB->getMeshNodeByIndex(i);
+        if (node->num != localNodeNum && sinceLastSeen(node) < NUM_ONLINE_SECS && !node->via_mqtt) {
+            nodeList.emplace_back(node->snr, node);
+        }
     }
-  }
 
-  // Sort nodes by SNR in descending order
-  std::sort(nodeList.begin(), nodeList.end(), [](const std::pair<int, meshtastic_NodeInfoLite*>& a, const std::pair<int, meshtastic_NodeInfoLite*>& b) {
-      return a.first > b.first;
-      });
+    // Sort nodes by SNR in descending order
+    std::sort(nodeList.begin(), nodeList.end(), [](const std::pair<int, meshtastic_NodeInfoLite*>& a, const std::pair<int, meshtastic_NodeInfoLite*>& b) {
+        return a.first > b.first;
+    });
 
-  // Generate the string with the closest node names
-  String nodeNames = "feat ";
-  int count = 0;
-  for (const auto &node : nodeList) {
-    if (count >= maxNodes) break;
-    if (count > 0) nodeNames += ", ";
-    if (strcmp(node.second->user.long_name, "") == 0) continue;
-    nodeNames += node.second->user.long_name;
-    count++;
-  }
+    // Generate the string with the closest node names
+    String nodeNames = "feat ";
+    int count = 0;
+    int currentLineLength = 0;
 
-  if (nodeNames == "feat ") {
-    nodeNames = "No nodes";
-  }
+    for (const auto &nodePair : nodeList) {
+        if (count >= maxNodes) break;
 
-  return nodeNames;
+        meshtastic_NodeInfoLite* node = nodePair.second;
+        if (!node->has_user) continue;
+        if (strcmp(node->user.long_name, "") == 0) continue;
+
+        String nodeName = node->user.long_name;
+
+        if (currentLineLength + nodeName.length() + 2 > MAX_LINE_LENGTH) {  // +2 for ", "
+            nodeNames += "\n";
+            currentLineLength = 0;
+        }
+
+        if (currentLineLength > 0) {
+            nodeNames += ", ";
+            currentLineLength += 2;
+        }
+
+        nodeNames += nodeName;
+        currentLineLength += nodeName.length();
+        count++;
+    }
+
+    if (nodeNames == "feat ") {
+        nodeNames = "No nodes";
+    }
+
+    return nodeNames;
 }
 
 String NaraModule::getShortMessage()
