@@ -3,6 +3,7 @@
 #include "configuration.h"
 #include "main.h"
 #include "graphics/ScreenFonts.h"
+#include "CryptoEngine.h"
 
 #include <assert.h>
 #include <vector>
@@ -37,7 +38,8 @@ void NaraModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int1
 {
   display->setTextAlignment(TEXT_ALIGN_LEFT);
   display->setFont(FONT_MEDIUM);
-  display->drawString(x, y, owner.long_name);
+  // display->drawString(x, y, owner.long_name);
+  display->drawString(x, y, hashMessage);
   y += _fontHeight(FONT_MEDIUM);
   display->setFont(FONT_SMALL);
   display->drawString(x, y, getNaraMessage(y));
@@ -67,6 +69,16 @@ int32_t NaraModule::runOnce()
   if (firstTime) {
     firstTime = 0;
     LOG_DEBUG("runOnce on NaraModule for the first time\n");
+
+    // Calculate the hash once using the owner's name as the seed
+    int counter = crypto->performHashcash(owner.long_name, 4);
+    hashMessage = crypto->getHashString(owner.long_name, counter);
+
+    LOG_INFO("found hash for \"%s\": %s\n",owner.long_name, hashMessage.c_str());
+
+    /* char buffer[128]; */
+    /* snprintf(buffer, sizeof(buffer), "c: %d", counter); */
+    /* hashMessage = String(buffer); */
   } else {
     LOG_DEBUG("other NaraModule runs\n");
   }

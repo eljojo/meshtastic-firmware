@@ -2,16 +2,30 @@
 #include "configuration.h"
 
 #include "mbedtls/aes.h"
+#include "mbedtls/md.h"
 
 class ESP32CryptoEngine : public CryptoEngine
 {
 
     mbedtls_aes_context aes;
+    mbedtls_md_context_t md_ctx;
 
   public:
-    ESP32CryptoEngine() { mbedtls_aes_init(&aes); }
+    ESP32CryptoEngine() {
+      mbedtls_aes_init(&aes);
 
-    ~ESP32CryptoEngine() { mbedtls_aes_free(&aes); }
+      // TODO: add if NARA
+      mbedtls_md_init(&md_ctx);
+      const mbedtls_md_info_t* md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+      mbedtls_md_setup(&md_ctx, md_info, 0);
+    }
+
+    ~ESP32CryptoEngine() {
+      mbedtls_aes_free(&aes);
+
+      // TODO: add if NARA
+      mbedtls_md_free(&md_ctx);
+    }
 
     /**
      * Set the key used for encrypt, decrypt.
@@ -64,7 +78,62 @@ class ESP32CryptoEngine : public CryptoEngine
         encrypt(fromNode, packetId, numBytes, bytes);
     }
 
-  private:
+    /**
+     * Perform a naive "hashcash" function.
+     *
+     * @param seed Initial seed string to be hashed.
+     * @param numZeros Number of trailing zeros required in the hash.
+     * @return The counter value when the required hash is found.
+     */
+    int performHashcash(const char* seed, int numZeros)
+    {
+      char input[128];
+      unsigned char hash[32];
+      int counter = 0;
+      int numTrailingBits = numZeros * 4;  // Since each hex digit represents 4 bits
+
+      LOG_INFO("Searching for hash for seed: \"%s\"\n", seed);
+
+      while (true) {
+        // Create input string
+        sprintf(input, "%s%d", seed, counter);
+
+        // Compute SHA-256 hash
+        mbedtls_md_starts(&md_ctx);
+        mbedtls_md_update(&md_ctx, (const unsigned char*)input, strlen(input));
+        mbedtls_md_finish(&md_ctx, hash);
+
+        // Check if hash ends with the required number of zeros
+        if (hashEndsWithZeros(hash, numTrailingBits)) {
+          LOG_INFO("Proof found! Seed: %s, Counter: %d\n", seed, counter);
+          return counter;
+        }
+
+        counter++;
+      }
+    }
+
+    String getHashString(const char* seed, int counter)
+    {
+      char input[128];
+      unsigned char hash[32];
+      char hashString[65];  // 64 hex digits + null terminator
+
+      // Create input string
+      sprintf(input, "%s%d", seed, counter);
+
+      // Compute SHA-256 hash
+      mbedtls_md_starts(&md_ctx);
+      mbedtls_md_update(&md_ctx, (const unsigned char*)input, strlen(input));
+      mbedtls_md_finish(&md_ctx, hash);
+
+      // Convert hash to a hex string
+      for (int i = 0; i < 32; i++) {
+        sprintf(&hashString[i * 2], "%02x", hash[i]);
+      }
+
+      return String(hashString);
+    }
 };
 
 CryptoEngine *crypto = new ESP32CryptoEngine();

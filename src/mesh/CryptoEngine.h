@@ -49,6 +49,17 @@ class CryptoEngine
     virtual void encrypt(uint32_t fromNode, uint64_t packetId, size_t numBytes, uint8_t *bytes);
     virtual void decrypt(uint32_t fromNode, uint64_t packetId, size_t numBytes, uint8_t *bytes);
 
+    /**
+     * Perform a naive "hashcash" function.
+     *
+     * @param seed Initial seed string to be hashed.
+     * @param numZeros Number of trailing zeros required in the hash.
+     * @return The counter value when the required hash is found.
+     */
+    virtual int performHashcash(const char* seed, int numZeros);
+
+    virtual String getHashString(const char* seed, int counter);
+
   protected:
     /**
      * Init our 128 bit nonce for a new packet
@@ -59,6 +70,30 @@ class CryptoEngine
      * a 32 bit block counter (starts at zero)
      */
     void initNonce(uint32_t fromNode, uint64_t packetId);
+
+    // Utility function to check if the hash ends with the desired number of trailing zero bits
+    bool hashEndsWithZeros(const unsigned char* hash, int numTrailingBits)
+    {
+        int numBytes = numTrailingBits / 8;
+        int numBits = numTrailingBits % 8;
+
+        // Check full zero bytes
+        for (int i = 31; i >= 32 - numBytes; i--) {
+            if (hash[i] != 0) {
+                return false;
+            }
+        }
+
+        // Check remaining bits
+        if (numBits > 0) {
+            unsigned char mask = (1 << numBits) - 1;
+            if ((hash[31 - numBytes] & mask) != 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 };
 
 extern CryptoEngine *crypto;

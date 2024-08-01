@@ -39,6 +39,8 @@ class NaraModule : private concurrency::OSThread, public SinglePortModule
 
     void updateNodeCount();
     String getLongMessage();
+
+    String hashMessage;
 };
 
 extern NaraModule *naraModule;
