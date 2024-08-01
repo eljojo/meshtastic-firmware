@@ -17,21 +17,69 @@ NaraModule *naraModule;
 meshtastic_MeshPacket *NaraModule::allocReply()
 {
   assert(currentRequest); // should always be !NULL
-#ifdef DEBUG_PORT
+
+  // Copy the payload of the current request
   auto req = *currentRequest;
-  auto &p = req.decoded;
+  const auto &p = req.decoded;
+
+#ifdef DEBUG_PORT
   // The incoming message is in p.payload
   LOG_INFO("NARA Received message from=0x%0x, id=%d, msg=%.*s\n", req.from, req.id, p.payload.size, p.payload.bytes);
 #endif
 
+  meshtastic_NaraMessage scratch;
+  memset(&scratch, 0, sizeof(scratch));
+  pb_decode_from_bytes(p.payload.bytes, p.payload.size, &meshtastic_NaraMessage_msg, &scratch);
+  meshtastic_NaraMessage *updated = NULL;
+  updated = &scratch;
+
+  /* printRoute(updated, req.from, req.to); */
+
   screen->print("Sending reply\n");
 
-  const char *replyStr = "Message Received";
-  auto reply = allocDataPacket();                 // Allocate a packet for sending
-  reply->decoded.payload.size = strlen(replyStr); // You must specify how many bytes are in the reply
-  memcpy(reply->decoded.payload.bytes, replyStr, reply->decoded.payload.size);
+  // Create a MeshPacket with this payload and set it as the reply
+  meshtastic_MeshPacket *reply = allocDataProtobuf(*updated);
+
+  // const char *replyStr = "Message Received";
+  // reply->decoded.payload.size = strlen(replyStr); // You must specify how many bytes are in the reply
+  // memcpy(reply->decoded.payload.bytes, replyStr, reply->decoded.payload.size);
 
   return reply;
+}
+
+bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *nara_message)
+{
+  LOG_INFO("NARA Received message from=0x%0x, id=%d, counter=%d,msg_type=%d\n", mp.from, mp.id, nara_message->poem.counter, nara_message->type);
+    /* // Only handle a response */
+    /* if (mp.decoded.request_id) { */
+    /*     printRoute(r, mp.to, mp.from); */
+    /* } */
+
+    return true;
+}
+
+bool NaraModule::sendInfo(NodeNum dest)
+{
+    meshtastic_NaraMessage_Poem poem = meshtastic_NaraMessage_Poem_init_default;
+    /* poem.base = hashMessage.c_str(); */
+    poem.counter = 123;
+
+    meshtastic_NaraMessage nara_message = meshtastic_NaraMessage_init_default;
+    nara_message.type = meshtastic_NaraMessage_MessageType_GREETING;
+    nara_message.has_poem = true;
+    nara_message.poem = poem;
+
+
+    meshtastic_MeshPacket *p = allocDataProtobuf(nara_message);
+    p->to = dest;
+    p->decoded.want_response = false;
+    p->priority = meshtastic_MeshPacket_Priority_BACKGROUND;
+
+    LOG_INFO("NARA Sending message to=0x%0x, id=%d, counter=%d,msg_type=%d\n", p->to, p->id, nara_message.poem.counter, nara_message.type);
+
+    service.sendToMesh(p, RX_SRC_LOCAL, true);
+
+    return true;
 }
 
 void NaraModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y)
@@ -64,8 +112,28 @@ bool NaraModule::wantUIFrame()
   return true;
 }
 
+bool NaraModule::messageNextNode()
+{
+  for (auto& entry : naraDatabase) {
+    if (entry.second.status == UNCONTACTED) {
+      LOG_INFO("node %0x is UNCONTACTED, messaging now\n", entry.first);
+
+      // Send a greeting message to the node
+      sendInfo(entry.first);
+
+      // Update the status
+      entry.second.status = SENT_GREETING;
+      return true;
+    }
+  }
+  return false;
+}
+
 int32_t NaraModule::runOnce()
 {
+
+  updateNodeCount();
+
   if (firstTime) {
     firstTime = 0;
     LOG_DEBUG("runOnce on NaraModule for the first time\n");
@@ -81,10 +149,10 @@ int32_t NaraModule::runOnce()
     /* hashMessage = String(buffer); */
   } else {
     LOG_DEBUG("other NaraModule runs\n");
+
+    messageNextNode();
   }
 
-  // Update node count
-  updateNodeCount();
 
   return 10 * 1000; // run again in 10 seconds
 }
@@ -102,6 +170,11 @@ void NaraModule::updateNodeCount()
 
     if (node->num != localNodeNum && sinceLastSeen(node) < NUM_ONLINE_SECS && !node->via_mqtt) {
       nodeCount++;
+
+      // Maintain the NaraEntry database
+      if (naraDatabase.find(node->num) == naraDatabase.end()) {
+        naraDatabase[node->num] = {UNCONTACTED};
+      }
     }
   }
 
@@ -194,4 +267,8 @@ String NaraModule::getNaraMessage(int16_t y)
   } else {
     return getLongMessage();
   }
+}
+
+NaraModule::NaraModule() : concurrency::OSThread("NaraModule"), ProtobufModule("nara", meshtastic_PortNum_NARA_APP, &meshtastic_NaraMessage_msg) {
+  ourPortNum = meshtastic_PortNum_NARA_APP;
 }

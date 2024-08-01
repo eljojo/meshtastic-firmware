@@ -1,20 +1,26 @@
 #pragma once
-#include "SinglePortModule.h"
+#include "ProtobufModule.h"
+#include "mesh/generated/meshtastic/nara.pb.h"
 
 #include <OLEDDisplay.h>
 #include <OLEDDisplayUi.h>
+#include <map>
 
-/**
- * A simple example module that just replies with "Message received" to any message it receives.
- */
+enum NaraEntryStatus {
+    UNCONTACTED,
+    SENT_GREETING,
+    RECEIVED_RESPONSE,
+    PRESENT_RECEIVED
+};
 
-class NaraModule : private concurrency::OSThread, public SinglePortModule
+struct NaraEntry {
+    NaraEntryStatus status;
+};
+
+class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtastic_NaraMessage>
 {
   public:
-    /** Constructor
-     * name is for debugging output
-     */
-    NaraModule() : concurrency::OSThread("NaraModule"), SinglePortModule("nara", meshtastic_PortNum_PRIVATE_APP) {}
+    NaraModule();
 
     virtual bool wantUIFrame() override;
 #if !HAS_SCREEN
@@ -23,9 +29,13 @@ class NaraModule : private concurrency::OSThread, public SinglePortModule
     virtual void drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y) override;
 #endif
 
+    bool handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *r) override;
+
     String getNaraMessage(int16_t y);
     String getShortMessage();
     String getClosestNodeNames(int maxNodes);
+
+    bool sendInfo(NodeNum dest = NODENUM_BROADCAST);
 
   protected:
     bool firstTime = 1;
@@ -38,9 +48,14 @@ class NaraModule : private concurrency::OSThread, public SinglePortModule
     int nodeCount = 0;
 
     void updateNodeCount();
+    bool messageNextNode();
+
     String getLongMessage();
 
     String hashMessage;
+
+    std::map<NodeNum, NaraEntry> naraDatabase;
+
 };
 
 extern NaraModule *naraModule;
