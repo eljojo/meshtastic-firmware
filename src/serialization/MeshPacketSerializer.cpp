@@ -3,6 +3,7 @@
 #include "NodeDB.h"
 #include "mesh/generated/meshtastic/mqtt.pb.h"
 #include "mesh/generated/meshtastic/telemetry.pb.h"
+#include "mesh/generated/meshtastic/nara.pb.h"
 #include "modules/RoutingModule.h"
 #include <DebugConfiguration.h>
 #include <mesh-pb-constants.h>
@@ -278,6 +279,21 @@ std::string MeshPacketSerializer::JsonSerialize(const meshtastic_MeshPacket *mp,
                 }
             } else if (shouldLog) {
                 LOG_ERROR("Error decoding protobuf for RemoteHardware message!\n");
+            }
+            break;
+        }
+        case meshtastic_PortNum_NARA_APP: {
+            msgType = "nara";
+            meshtastic_NaraMessage scratch;
+            meshtastic_NaraMessage *decoded = NULL;
+            memset(&scratch, 0, sizeof(scratch));
+            if (pb_decode_from_bytes(mp->decoded.payload.bytes, mp->decoded.payload.size, &meshtastic_NaraMessage_msg, &scratch)) {
+                decoded = &scratch;
+                msgPayload["haiku_text"] = new JSONValue(decoded->haiku.text);
+                msgPayload["haiku_signature"] = new JSONValue(decoded->haiku.signature);
+                msgPayload["message_type"] = new JSONValue(decoded->type);
+            } else if (shouldLog) {
+                LOG_ERROR("Error decoding protobuf for nara message!\n");
             }
             break;
         }
