@@ -8,8 +8,9 @@
 
 enum NaraEntryStatus {
     UNCONTACTED,
-    SENT_GREETING,
-    RECEIVED_RESPONSE,
+    GREETING_SENT,
+    GREETING_RECEIVED,
+    PRESENT_SENT,
     PRESENT_RECEIVED
 };
 
@@ -36,6 +37,7 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
     String getClosestNodeNames(int maxNodes);
 
     bool sendGreeting(NodeNum dest = NODENUM_BROADCAST);
+    bool sendPresent(NodeNum dest = NODENUM_BROADCAST);
 
   protected:
     bool firstTime = 1;

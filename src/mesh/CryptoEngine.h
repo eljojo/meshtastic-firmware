@@ -58,7 +58,28 @@ class CryptoEngine
      */
     virtual int performHashcash(const char* seed, int numZeros);
 
-    virtual String getHashString(const char* seed, int counter);
+    virtual void calculateHash(unsigned char* hash, const char* seed, int counter);
+
+    String getHashString(const char* seed, int counter)
+    {
+      unsigned char hash[32];
+      char hashString[65];  // 64 hex digits + null terminator
+
+      calculateHash(hash, seed, counter);
+
+      // Convert hash to a hex string
+      for (int i = 0; i < 32; i++) {
+        sprintf(&hashString[i * 2], "%02x", hash[i]);
+      }
+
+      return String(hashString);
+    }
+
+    bool checkHashcash(const char* seed, int counter, int numZeros) {
+      unsigned char hash[32];
+      calculateHash(hash, seed, counter);
+      return hashEndsWithZeros(hash, numZeros);
+    }
 
   protected:
     /**

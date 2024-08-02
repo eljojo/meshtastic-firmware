@@ -113,11 +113,10 @@ class ESP32CryptoEngine : public CryptoEngine
       }
     }
 
-    String getHashString(const char* seed, int counter)
+    void calculateHash(unsigned char* hash, const char* seed, int counter)
     {
       char input[128];
-      unsigned char hash[32];
-      char hashString[65];  // 64 hex digits + null terminator
+      //unsigned char hash[32];
 
       // Create input string
       sprintf(input, "%s%d", seed, counter);
@@ -126,14 +125,8 @@ class ESP32CryptoEngine : public CryptoEngine
       mbedtls_md_starts(&md_ctx);
       mbedtls_md_update(&md_ctx, (const unsigned char*)input, strlen(input));
       mbedtls_md_finish(&md_ctx, hash);
-
-      // Convert hash to a hex string
-      for (int i = 0; i < 32; i++) {
-        sprintf(&hashString[i * 2], "%02x", hash[i]);
-      }
-
-      return String(hashString);
     }
+
 };
 
 CryptoEngine *crypto = new ESP32CryptoEngine();
