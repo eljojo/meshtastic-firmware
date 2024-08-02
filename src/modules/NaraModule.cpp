@@ -284,10 +284,10 @@ String NaraModule::getLongMessage()
   for (auto& entry : naraDatabase) {
     if (entry.second.status == GREETING_SENT) {
       points += 1;
-    } else if (entry.second.status == GREETING_RECEIVED) {
+    } else if (entry.second.status == GREETING_RECEIVED || entry.second.status == PRESENT_RECEIVED) {
       points += 2;
       naraSeen += 1;
-    } else if (entry.second.status == PRESENT_SENT || entry.second.status == PRESENT_RECEIVED) {
+    } else if (entry.second.status == PRESENT_SENT) {
       points += 3;
       naraSeen += 1;
     }
