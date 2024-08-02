@@ -16,16 +16,15 @@ typedef enum _meshtastic_NaraMessage_MessageType {
 } meshtastic_NaraMessage_MessageType;
 
 /* Struct definitions */
-typedef struct _meshtastic_NaraMessage_Poem {
-    pb_callback_t base; /* seed of poem */
-    uint32_t counter; /* integer that represents */
-    pb_callback_t hash; /* 256-bit hash of base+counter */
-} meshtastic_NaraMessage_Poem;
+typedef struct _meshtastic_NaraMessage_Haiku {
+    char text[128];
+    uint32_t signature; /* integer that helps derive good-looking SHA256 signature */
+} meshtastic_NaraMessage_Haiku;
 
 typedef struct _meshtastic_NaraMessage {
     meshtastic_NaraMessage_MessageType type;
-    bool has_poem;
-    meshtastic_NaraMessage_Poem poem;
+    bool has_haiku;
+    meshtastic_NaraMessage_Haiku haiku;
 } meshtastic_NaraMessage;
 
 
@@ -43,43 +42,42 @@ extern "C" {
 
 
 /* Initializer values for message structs */
-#define meshtastic_NaraMessage_init_default      {_meshtastic_NaraMessage_MessageType_MIN, false, meshtastic_NaraMessage_Poem_init_default}
-#define meshtastic_NaraMessage_Poem_init_default {{{NULL}, NULL}, 0, {{NULL}, NULL}}
-#define meshtastic_NaraMessage_init_zero         {_meshtastic_NaraMessage_MessageType_MIN, false, meshtastic_NaraMessage_Poem_init_zero}
-#define meshtastic_NaraMessage_Poem_init_zero    {{{NULL}, NULL}, 0, {{NULL}, NULL}}
+#define meshtastic_NaraMessage_init_default      {_meshtastic_NaraMessage_MessageType_MIN, false, meshtastic_NaraMessage_Haiku_init_default}
+#define meshtastic_NaraMessage_Haiku_init_default {"", 0}
+#define meshtastic_NaraMessage_init_zero         {_meshtastic_NaraMessage_MessageType_MIN, false, meshtastic_NaraMessage_Haiku_init_zero}
+#define meshtastic_NaraMessage_Haiku_init_zero   {"", 0}
 
 /* Field tags (for use in manual encoding/decoding) */
-#define meshtastic_NaraMessage_Poem_base_tag     1
-#define meshtastic_NaraMessage_Poem_counter_tag  2
-#define meshtastic_NaraMessage_Poem_hash_tag     3
+#define meshtastic_NaraMessage_Haiku_text_tag    1
+#define meshtastic_NaraMessage_Haiku_signature_tag 2
 #define meshtastic_NaraMessage_type_tag          1
-#define meshtastic_NaraMessage_poem_tag          2
+#define meshtastic_NaraMessage_haiku_tag         2
 
 /* Struct field encoding specification for nanopb */
 #define meshtastic_NaraMessage_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, UENUM,    type,              1) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  poem,              2)
+X(a, STATIC,   OPTIONAL, MESSAGE,  haiku,             2)
 #define meshtastic_NaraMessage_CALLBACK NULL
 #define meshtastic_NaraMessage_DEFAULT NULL
-#define meshtastic_NaraMessage_poem_MSGTYPE meshtastic_NaraMessage_Poem
+#define meshtastic_NaraMessage_haiku_MSGTYPE meshtastic_NaraMessage_Haiku
 
-#define meshtastic_NaraMessage_Poem_FIELDLIST(X, a) \
-X(a, CALLBACK, SINGULAR, STRING,   base,              1) \
-X(a, STATIC,   SINGULAR, UINT32,   counter,           2) \
-X(a, CALLBACK, SINGULAR, BYTES,    hash,              3)
-#define meshtastic_NaraMessage_Poem_CALLBACK pb_default_field_callback
-#define meshtastic_NaraMessage_Poem_DEFAULT NULL
+#define meshtastic_NaraMessage_Haiku_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, STRING,   text,              1) \
+X(a, STATIC,   SINGULAR, UINT32,   signature,         2)
+#define meshtastic_NaraMessage_Haiku_CALLBACK NULL
+#define meshtastic_NaraMessage_Haiku_DEFAULT NULL
 
 extern const pb_msgdesc_t meshtastic_NaraMessage_msg;
-extern const pb_msgdesc_t meshtastic_NaraMessage_Poem_msg;
+extern const pb_msgdesc_t meshtastic_NaraMessage_Haiku_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define meshtastic_NaraMessage_fields &meshtastic_NaraMessage_msg
-#define meshtastic_NaraMessage_Poem_fields &meshtastic_NaraMessage_Poem_msg
+#define meshtastic_NaraMessage_Haiku_fields &meshtastic_NaraMessage_Haiku_msg
 
 /* Maximum encoded size of messages (where known) */
-/* meshtastic_NaraMessage_size depends on runtime parameters */
-/* meshtastic_NaraMessage_Poem_size depends on runtime parameters */
+#define MESHTASTIC_MESHTASTIC_NARA_PB_H_MAX_SIZE meshtastic_NaraMessage_size
+#define meshtastic_NaraMessage_Haiku_size        136
+#define meshtastic_NaraMessage_size              141
 
 #ifdef __cplusplus
 } /* extern "C" */

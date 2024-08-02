@@ -62,10 +62,10 @@ bool NaraModule::sendGreeting(NodeNum dest)
 {
     meshtastic_NaraMessage_Haiku haiku = meshtastic_NaraMessage_Haiku_init_default;
 
-    /* haiku.base = meshtastic_NaraMessage_Haiku_base_tag; */
-    strncpy(haiku.base, hashMessage.c_str(), sizeof(hashMessage));
+    /* haiku.text = meshtastic_NaraMessage_Haiku_text_tag; */
+    strncpy(haiku.text, hashMessage.c_str(), sizeof(hashMessage));
 
-    /* haiku.base = hashMessage.c_str(); */
+    /* haiku.text = hashMessage.c_str(); */
     haiku.signature = 123;
 
     meshtastic_NaraMessage nara_message = meshtastic_NaraMessage_init_default;
@@ -78,7 +78,7 @@ bool NaraModule::sendGreeting(NodeNum dest)
     p->decoded.want_response = false;
     p->priority = meshtastic_MeshPacket_Priority_BACKGROUND;
 
-    LOG_INFO("NARA Sending message to=0x%0x, id=%d, haiku_base=%s,haiku_signature=%d,msg_type=%d\n", p->to, p->id, nara_message.haiku.base, nara_message.haiku.signature, nara_message.type);
+    LOG_INFO("NARA Sending message to=0x%0x, id=%d, haiku_text=%s,haiku_signature=%d,msg_type=%d\n", p->to, p->id, nara_message.haiku.text, nara_message.haiku.signature, nara_message.type);
 
     service.sendToMesh(p, RX_SRC_LOCAL, true);
 

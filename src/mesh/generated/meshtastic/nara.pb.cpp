@@ -9,7 +9,7 @@
 PB_BIND(meshtastic_NaraMessage, meshtastic_NaraMessage, AUTO)
 
 
-PB_BIND(meshtastic_NaraMessage_Poem, meshtastic_NaraMessage_Poem, AUTO)
+PB_BIND(meshtastic_NaraMessage_Haiku, meshtastic_NaraMessage_Haiku, AUTO)
 
 
 
