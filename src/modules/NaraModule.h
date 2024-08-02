@@ -53,6 +53,7 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
     String getLongMessage();
 
     String hashMessage;
+    String screenLog;
 
     std::map<NodeNum, NaraEntry> naraDatabase;
 

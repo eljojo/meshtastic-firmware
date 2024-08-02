@@ -50,6 +50,9 @@ meshtastic_MeshPacket *NaraModule::allocReply()
 bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *nara_message)
 {
   LOG_INFO("NARA Received message from=0x%0x, id=%d, haiku_text=%s, haiku_signature=%d, msg_type=%d\n", mp.from, mp.id, nara_message->haiku.text, nara_message->haiku.signature, nara_message->type);
+
+  screenLog = "greetings from 0x" + String(mp.from, HEX);
+
     /* // Only handle a response */
     /* if (mp.decoded.request_id) { */
     /*     printRoute(r, mp.to, mp.from); */
@@ -61,12 +64,8 @@ bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtas
 bool NaraModule::sendGreeting(NodeNum dest)
 {
     meshtastic_NaraMessage_Haiku haiku = meshtastic_NaraMessage_Haiku_init_default;
-
-    /* haiku.text = meshtastic_NaraMessage_Haiku_text_tag; */
     strncpy(haiku.text, hashMessage.c_str(), sizeof(hashMessage));
-
-    /* haiku.text = hashMessage.c_str(); */
-    haiku.signature = 123;
+    // haiku.signature = 123;
 
     meshtastic_NaraMessage nara_message = meshtastic_NaraMessage_init_default;
     nara_message.type = meshtastic_NaraMessage_MessageType_GREETING;
@@ -75,12 +74,12 @@ bool NaraModule::sendGreeting(NodeNum dest)
 
     meshtastic_MeshPacket *p = allocDataProtobuf(nara_message);
     p->to = dest;
-    p->decoded.want_response = false;
-    p->priority = meshtastic_MeshPacket_Priority_BACKGROUND;
+    p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
 
     LOG_INFO("NARA Sending message to=0x%0x, id=%d, haiku_text=%s,haiku_signature=%d,msg_type=%d\n", p->to, p->id, nara_message.haiku.text, nara_message.haiku.signature, nara_message.type);
-
     service.sendToMesh(p, RX_SRC_LOCAL, true);
+
+    screenLog = "saying hi to 0x" + String(p->to, HEX);
 
     return true;
 }
@@ -88,10 +87,10 @@ bool NaraModule::sendGreeting(NodeNum dest)
 void NaraModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y)
 {
   display->setTextAlignment(TEXT_ALIGN_LEFT);
-  display->setFont(FONT_MEDIUM);
+  display->setFont(FONT_SMALL);
   // display->drawString(x, y, owner.long_name);
-  display->drawString(x, y, hashMessage);
-  y += _fontHeight(FONT_MEDIUM);
+  display->drawString(x, y, screenLog);
+  y += _fontHeight(FONT_SMALL);
   display->setFont(FONT_SMALL);
   display->drawString(x, y, getNaraMessage(y));
 
@@ -120,11 +119,7 @@ bool NaraModule::messageNextNode()
   for (auto& entry : naraDatabase) {
     if (entry.second.status == UNCONTACTED) {
       LOG_INFO("node %0x is UNCONTACTED, messaging now\n", entry.first);
-
-      // Send a greeting message to the node
       sendGreeting(entry.first);
-
-      // Update the status
       entry.second.status = SENT_GREETING;
       return true;
     }
@@ -140,11 +135,14 @@ int32_t NaraModule::runOnce()
     firstTime = 0;
     LOG_DEBUG("runOnce on NaraModule for the first time\n");
 
-    // Calculate the hash once using the owner's name as the seed
+    screenLog = "Hello Nara";
+
     int signature = crypto->performHashcash(owner.long_name, 4);
     hashMessage = crypto->getHashString(owner.long_name, signature);
 
     LOG_INFO("found hash for \"%s\": %s\n",owner.long_name, hashMessage.c_str());
+
+    screenLog = String("Hello ") + String(owner.long_name);
 
     /* char buffer[128]; */
     /* snprintf(buffer, sizeof(buffer), "c: %d", signature); */
