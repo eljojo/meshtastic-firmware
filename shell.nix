@@ -8,5 +8,6 @@ pkgs.mkShell {
     pkgs.platformio
     pkgs.nanopb
     pkgs.esptool
+    pkgs.protobuf
   ];
 }
