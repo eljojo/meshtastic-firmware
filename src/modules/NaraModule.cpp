@@ -49,7 +49,7 @@ meshtastic_MeshPacket *NaraModule::allocReply()
 
 bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *nara_message)
 {
-  LOG_INFO("NARA Received message from=0x%0x, id=%d, counter=%d,msg_type=%d\n", mp.from, mp.id, nara_message->poem.counter, nara_message->type);
+  LOG_INFO("NARA Received message from=0x%0x, id=%d, haiku_text=%s, haiku_signature=%d, msg_type=%d\n", mp.from, mp.id, nara_message->haiku.text, nara_message->haiku.signature, nara_message->type);
     /* // Only handle a response */
     /* if (mp.decoded.request_id) { */
     /*     printRoute(r, mp.to, mp.from); */
@@ -58,24 +58,27 @@ bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtas
     return true;
 }
 
-bool NaraModule::sendInfo(NodeNum dest)
+bool NaraModule::sendGreeting(NodeNum dest)
 {
-    meshtastic_NaraMessage_Poem poem = meshtastic_NaraMessage_Poem_init_default;
-    /* poem.base = hashMessage.c_str(); */
-    poem.counter = 123;
+    meshtastic_NaraMessage_Haiku haiku = meshtastic_NaraMessage_Haiku_init_default;
+
+    /* haiku.base = meshtastic_NaraMessage_Haiku_base_tag; */
+    strncpy(haiku.base, hashMessage.c_str(), sizeof(hashMessage));
+
+    /* haiku.base = hashMessage.c_str(); */
+    haiku.signature = 123;
 
     meshtastic_NaraMessage nara_message = meshtastic_NaraMessage_init_default;
     nara_message.type = meshtastic_NaraMessage_MessageType_GREETING;
-    nara_message.has_poem = true;
-    nara_message.poem = poem;
-
+    nara_message.has_haiku = true;
+    nara_message.haiku = haiku;
 
     meshtastic_MeshPacket *p = allocDataProtobuf(nara_message);
     p->to = dest;
     p->decoded.want_response = false;
     p->priority = meshtastic_MeshPacket_Priority_BACKGROUND;
 
-    LOG_INFO("NARA Sending message to=0x%0x, id=%d, counter=%d,msg_type=%d\n", p->to, p->id, nara_message.poem.counter, nara_message.type);
+    LOG_INFO("NARA Sending message to=0x%0x, id=%d, haiku_base=%s,haiku_signature=%d,msg_type=%d\n", p->to, p->id, nara_message.haiku.base, nara_message.haiku.signature, nara_message.type);
 
     service.sendToMesh(p, RX_SRC_LOCAL, true);
 
@@ -119,7 +122,7 @@ bool NaraModule::messageNextNode()
       LOG_INFO("node %0x is UNCONTACTED, messaging now\n", entry.first);
 
       // Send a greeting message to the node
-      sendInfo(entry.first);
+      sendGreeting(entry.first);
 
       // Update the status
       entry.second.status = SENT_GREETING;
@@ -131,7 +134,6 @@ bool NaraModule::messageNextNode()
 
 int32_t NaraModule::runOnce()
 {
-
   updateNodeCount();
 
   if (firstTime) {
@@ -139,20 +141,19 @@ int32_t NaraModule::runOnce()
     LOG_DEBUG("runOnce on NaraModule for the first time\n");
 
     // Calculate the hash once using the owner's name as the seed
-    int counter = crypto->performHashcash(owner.long_name, 4);
-    hashMessage = crypto->getHashString(owner.long_name, counter);
+    int signature = crypto->performHashcash(owner.long_name, 4);
+    hashMessage = crypto->getHashString(owner.long_name, signature);
 
     LOG_INFO("found hash for \"%s\": %s\n",owner.long_name, hashMessage.c_str());
 
     /* char buffer[128]; */
-    /* snprintf(buffer, sizeof(buffer), "c: %d", counter); */
+    /* snprintf(buffer, sizeof(buffer), "c: %d", signature); */
     /* hashMessage = String(buffer); */
   } else {
     LOG_DEBUG("other NaraModule runs\n");
 
     messageNextNode();
   }
-
 
   return 10 * 1000; // run again in 10 seconds
 }

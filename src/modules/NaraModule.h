@@ -35,7 +35,7 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
     String getShortMessage();
     String getClosestNodeNames(int maxNodes);
 
-    bool sendInfo(NodeNum dest = NODENUM_BROADCAST);
+    bool sendGreeting(NodeNum dest = NODENUM_BROADCAST);
 
   protected:
     bool firstTime = 1;
