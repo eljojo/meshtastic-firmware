@@ -12,49 +12,20 @@ NaraModule *naraModule;
 
 #define NUM_ONLINE_SECS (60 * 60 * 2) // 2 hours to consider someone online
 #define MAX_LINE_LENGTH 26            // Maximum characters per line
-#define MAX_CLOSEST_NODES 4           // Maximum number of closest nodes to display
+#define MAX_CLOSEST_NODES 3           // Maximum number of closest nodes to display
 #define NUM_ZEROES 4                  // for hashcash
 
-meshtastic_MeshPacket *NaraModule::allocReply()
-{
-  assert(currentRequest); // should always be !NULL
-
-  // Copy the payload of the current request
-  auto req = *currentRequest;
-  const auto &p = req.decoded;
-
-#ifdef DEBUG_PORT
-  // The incoming message is in p.payload
-  LOG_INFO("NARA Received message from=0x%0x, id=%d, msg=%.*s\n", req.from, req.id, p.payload.size, p.payload.bytes);
-#endif
-
-  meshtastic_NaraMessage scratch;
-  memset(&scratch, 0, sizeof(scratch));
-  pb_decode_from_bytes(p.payload.bytes, p.payload.size, &meshtastic_NaraMessage_msg, &scratch);
-  meshtastic_NaraMessage *updated = NULL;
-  updated = &scratch;
-
-  /* printRoute(updated, req.from, req.to); */
-
-  screen->print("Sending reply\n");
-
-  // Create a MeshPacket with this payload and set it as the reply
-  meshtastic_MeshPacket *reply = allocDataProtobuf(*updated);
-
-  // const char *replyStr = "Message Received";
-  // reply->decoded.payload.size = strlen(replyStr); // You must specify how many bytes are in the reply
-  // memcpy(reply->decoded.payload.bytes, replyStr, reply->decoded.payload.size);
-
-  return reply;
-}
 
 bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *nara_message)
 {
-  LOG_INFO("NARA Received message from=0x%0x, id=%d, haiku_text=%s, haiku_signature=%d, msg_type=%d\n", mp.from, mp.id, nara_message->haiku.text, nara_message->haiku.signature, nara_message->type);
+  LOG_INFO(
+      "NARA Received message from=0x%0x, id=%d, haiku_text=%s, haiku_signature=%d, msg_type=%d\n",
+      mp.from, mp.id, nara_message->haiku.text, nara_message->haiku.signature, nara_message->type
+  );
 
   if (nara_message->haiku.signature > 0) {
     if (crypto->checkHashcash(nara_message->haiku.text, nara_message->haiku.signature, NUM_ZEROES)) {
-      LOG_INFO("NARA Signature verified\n");
+      LOG_DEBUG("NARA Signature verified\n");
     } else {
       LOG_INFO("NARA Signature verification failed\n");
       return false;
@@ -62,42 +33,40 @@ bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtas
   }
 
   if (nara_message->type == meshtastic_NaraMessage_MessageType_GREETING) {
-    screenLog = "0x" + String(mp.from, HEX) + " says hi";
-
-    // Update the NaraEntry database, setting the status to GREETING_RECEIVED
     if (naraDatabase.find(mp.from) != naraDatabase.end()) {
+      screenLog = "0x" + String(mp.from, HEX) + " says hi again";
       naraDatabase[mp.from].status = GREETING_RECEIVED;
     } else {
+      screenLog = "0x" + String(mp.from, HEX) + " says hi";
       naraDatabase[mp.from] = {GREETING_RECEIVED};
     }
 
     return true;
   } else if (nara_message->type == meshtastic_NaraMessage_MessageType_PRESENT) {
-    screenLog = "0x" + String(mp.from, HEX) + " sent a gift";
-
-    // Update the NaraEntry database, setting the status to PRESENT_RECEIVED
     if (naraDatabase.find(mp.from) != naraDatabase.end()) {
-      naraDatabase[mp.from].status = PRESENT_RECEIVED;
+      if(naraDatabase[mp.from].status == GREETING_SENT) {
+        naraDatabase[mp.from].status = PRESENT_RECEIVED;
+        screenLog = "0x" + String(mp.from, HEX) + " sent a haiku";
+      }else{
+        // screenLog = "0x" + String(mp.from, HEX) + " sent a new haiku";
+        LOG_WARN("Nara sent valid present but we weren't expecting it. current_status=%d\n", naraDatabase[mp.from].status);
+      }
     } else {
-      naraDatabase[mp.from] = {PRESENT_RECEIVED};
+      screenLog = String("unexpected haiku from 0x") + String(mp.from, HEX);
+      LOG_WARN("Nara sent valid present but we hadn't seen greeting\n");
+      // naraDatabase[mp.from] = {PRESENT_RECEIVED};
     }
 
     return true;
   }
 
-    /* // Only handle a response */
-    /* if (mp.decoded.request_id) { */
-    /*     printRoute(r, mp.to, mp.from); */
-    /* } */
-
-    return true;
+  return false;
 }
 
 bool NaraModule::sendGreeting(NodeNum dest)
 {
     meshtastic_NaraMessage_Haiku haiku = meshtastic_NaraMessage_Haiku_init_default;
     strncpy(haiku.text, hashMessage.c_str(), sizeof(hashMessage));
-    // haiku.signature = 123;
 
     meshtastic_NaraMessage nara_message = meshtastic_NaraMessage_init_default;
     nara_message.type = meshtastic_NaraMessage_MessageType_GREETING;
@@ -111,13 +80,15 @@ bool NaraModule::sendGreeting(NodeNum dest)
     LOG_INFO("NARA Sending greeting to=0x%0x, id=%d, haiku_text=%s,haiku_signature=%d,msg_type=%d\n", p->to, p->id, nara_message.haiku.text, nara_message.haiku.signature, nara_message.type);
     service.sendToMesh(p, RX_SRC_LOCAL, true);
 
-    screenLog = "greeting 0x" + String(p->to, HEX);
+    screenLog = "found 0x" + String(p->to, HEX);
 
     return true;
 }
 
 bool NaraModule::sendPresent(NodeNum dest)
 {
+    // screenLog = "prep gift for 0x" + String(dest, HEX);
+
     meshtastic_NaraMessage_Haiku haiku = meshtastic_NaraMessage_Haiku_init_default;
     strncpy(haiku.text, hashMessage.c_str(), sizeof(hashMessage));
     haiku.signature = crypto->performHashcash(haiku.text, NUM_ZEROES);
@@ -134,7 +105,7 @@ bool NaraModule::sendPresent(NodeNum dest)
     LOG_INFO("NARA Sending present to=0x%0x, id=%d, haiku_text=%s,haiku_signature=%d,msg_type=%d\n", p->to, p->id, nara_message.haiku.text, nara_message.haiku.signature, nara_message.type);
     service.sendToMesh(p, RX_SRC_LOCAL, true);
 
-    screenLog = "gift for 0x" + String(p->to, HEX);
+    screenLog = "friends with 0x" + String(p->to, HEX);
 
     return true;
 }
@@ -149,7 +120,6 @@ void NaraModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int1
   display->setFont(FONT_SMALL);
   display->drawString(x, y, getNaraMessage(y));
 
-  String closestNodes = getClosestNodeNames(MAX_CLOSEST_NODES);
   int splitIndex = closestNodes.indexOf('\n');
 
   y += _fontHeight(FONT_SMALL);
@@ -174,13 +144,13 @@ bool NaraModule::messageNextNode()
   for (auto& entry : naraDatabase) {
     if (entry.second.status == UNCONTACTED) {
       LOG_INFO("node %0x is UNCONTACTED, messaging now\n", entry.first);
-      sendGreeting(entry.first);
       entry.second.status = GREETING_SENT;
+      sendGreeting(entry.first);
       return true;
-    }else if (entry.second.status == GREETING_RECEIVED) {
+    }else if (entry.second.status == GREETING_RECEIVED || entry.second.status == PRESENT_RECEIVED) {
       LOG_INFO("node %0x is waiting for a present, sending now\n", entry.first);
-      sendPresent(entry.first);
       entry.second.status = PRESENT_SENT;
+      sendPresent(entry.first);
       return true;
     }
   }
@@ -189,31 +159,23 @@ bool NaraModule::messageNextNode()
 
 int32_t NaraModule::runOnce()
 {
-  updateNodeCount();
-
   if (firstTime) {
     firstTime = 0;
-    LOG_DEBUG("runOnce on NaraModule for the first time\n");
+    LOG_DEBUG("NaraModule initialized\n");
 
-    screenLog = "Hello Nara";
-
-    int signature = crypto->performHashcash(owner.long_name, NUM_ZEROES);
-    hashMessage = crypto->getHashString(owner.long_name, signature);
-
-    LOG_INFO("found hash for \"%s\": %s\n",owner.long_name, hashMessage.c_str());
+    // int signature = crypto->performHashcash(owner.long_name, NUM_ZEROES);
+    // hashMessage = crypto->getHashString(owner.long_name, signature);
+    // LOG_INFO("found hash for \"%s\": %s\n",owner.long_name, hashMessage.c_str());
+    hashMessage = String("Hello ") + String(owner.long_name);
 
     screenLog = String("Hello ") + String(owner.long_name);
-
-    /* char buffer[128]; */
-    /* snprintf(buffer, sizeof(buffer), "c: %d", signature); */
-    /* hashMessage = String(buffer); */
-  } else {
-    LOG_DEBUG("other NaraModule runs\n");
-
-    messageNextNode();
+    return 10000 + random(20000); // run again in 10-30 seconds
   }
 
-  return 10 * 1000; // run again in 10 seconds
+  updateNodeCount();
+  messageNextNode();
+
+  return 10 * 1000 + random(10 * 1000);
 }
 
 // used for debugging
@@ -245,6 +207,8 @@ void NaraModule::updateNodeCount()
   }
 
   LOG_DEBUG("[NARA] nodeCount=%u\n", nodeCount);
+
+  closestNodes = getClosestNodeNames(MAX_CLOSEST_NODES);
 }
 
 String NaraModule::getClosestNodeNames(int maxNodes)
@@ -265,7 +229,7 @@ String NaraModule::getClosestNodeNames(int maxNodes)
     });
 
     // Generate the string with the closest node names
-    String nodeNames = "feat ";
+    String nodeNames = "w/ ";
     int count = 0;
     int currentLineLength = 0;
 
@@ -274,9 +238,9 @@ String NaraModule::getClosestNodeNames(int maxNodes)
 
         meshtastic_NodeInfoLite* node = nodePair.second;
         if (!node->has_user) continue;
-        if (strcmp(node->user.long_name, "") == 0) continue;
+        if (strcmp(node->user.short_name, "") == 0) continue;
 
-        String nodeName = node->user.long_name;
+        String nodeName = node->user.short_name;
 
         if (currentLineLength + nodeName.length() + 2 > MAX_LINE_LENGTH) {  // +2 for ", "
             nodeNames += "\n";
@@ -293,7 +257,7 @@ String NaraModule::getClosestNodeNames(int maxNodes)
         count++;
     }
 
-    if (nodeNames == "feat ") {
+    if (nodeNames == "w/ ") {
         nodeNames = "No nodes";
     }
 
@@ -315,15 +279,21 @@ String NaraModule::getShortMessage()
 
 String NaraModule::getLongMessage()
 {
-  if (nodeCount <= 2) {
-    return "it's quiet here...";
-  } else if (nodeCount <= 5) {
-    return "oh, hello there";
-  } else if (nodeCount <= 9) {
-    return "let's get this party started!";
-  } else {
-    return "EVERYONE IS HERE";
+  int points = 0;
+  int naraSeen = 0;
+  for (auto& entry : naraDatabase) {
+    if (entry.second.status == GREETING_SENT) {
+      points += 1;
+    } else if (entry.second.status == GREETING_RECEIVED) {
+      points += 2;
+      naraSeen += 1;
+    } else if (entry.second.status == PRESENT_SENT || entry.second.status == PRESENT_RECEIVED) {
+      points += 3;
+      naraSeen += 1;
+    }
   }
+
+  return String(naraSeen) + " nara seen | " + String(points) + " points";
 }
 
 String NaraModule::getNaraMessage(int16_t y)

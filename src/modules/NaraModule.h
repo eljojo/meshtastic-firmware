@@ -10,8 +10,8 @@ enum NaraEntryStatus {
     UNCONTACTED,
     GREETING_SENT,
     GREETING_RECEIVED,
-    PRESENT_SENT,
-    PRESENT_RECEIVED
+    PRESENT_RECEIVED,
+    PRESENT_SENT
 };
 
 struct NaraEntry {
@@ -41,10 +41,6 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
 
   protected:
     bool firstTime = 1;
-    /** For reply module we do all of our processing in the (normally optional)
-     * want_replies handling
-     */
-    virtual meshtastic_MeshPacket *allocReply() override;
     virtual int32_t runOnce() override;
 
     int nodeCount = 0;
@@ -56,6 +52,7 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
 
     String hashMessage;
     String screenLog;
+    String closestNodes;
 
     std::map<NodeNum, NaraEntry> naraDatabase;
 
