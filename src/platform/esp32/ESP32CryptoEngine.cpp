@@ -119,7 +119,7 @@ class ESP32CryptoEngine : public CryptoEngine
         iterations++;
 
         if (maxIterations > 0 && iterations >= maxIterations) {
-          LOG_INFO("No hash found for seed: \"%s\" in %d iterations, counter = %ld\n", seed, maxIterations, counter);
+          LOG_INFO("No hash found in %d iterations, counter = %ld\n", maxIterations, counter);
           return 0;
         }
       }

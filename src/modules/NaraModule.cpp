@@ -243,7 +243,6 @@ String NaraModule::getLongMessage()
   int points = 0;
   int naraSeen = 0;
   for (auto& entry : naraDatabase) {
-    // call getPoints and increase nara seen if larger than 1
     points += entry.second.getPoints();
     if (entry.second.getPoints() > 1) {
       naraSeen++;

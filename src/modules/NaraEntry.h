@@ -41,8 +41,8 @@ class NaraEntry {
     void handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm);
 
     void checkWhoWon();
-
     int processNextStep();
+    String nodeName();
 
     bool sendGameInvite(NodeNum dest, char* haikuText);
     bool sendGameAccept(NodeNum dest, char* haikuText);

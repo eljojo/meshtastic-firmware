@@ -62,24 +62,27 @@ void NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_Nar
   }
 }
 
-void NaraEntry::setStatus(NaraEntryStatus status) {
-  this->status = status;
-  lastInteraction = millis();
-
+String NaraEntry::nodeName() {
   String otherNodeName = nodeDB->getMeshNode(nodeNum)->user.short_name;
   if(otherNodeName == "") {
     otherNodeName = String(nodeNum, HEX);
   }
+  return otherNodeName;
+}
+
+void NaraEntry::setStatus(NaraEntryStatus status) {
+  this->status = status;
+  lastInteraction = millis();
 
   switch(status) {
     case UNCONTACTED:
       // naraModule->setLog("uncontacted");
       break;
     case GAME_INVITE_SENT:
-      naraModule->setLog("invited " + otherNodeName);
+      naraModule->setLog("invited " + nodeName());
       break;
     case GAME_INVITE_RECEIVED:
-      naraModule->setLog(otherNodeName + " wants to play");
+      naraModule->setLog(nodeName() + " wants to play");
       break;
     case GAME_ACCEPTED:
       if(nodeDB->getNodeNum() < nodeNum) {
@@ -89,22 +92,22 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       }
       break;
     case GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US:
-      naraModule->setLog(otherNodeName + " is waiting for us");
+      naraModule->setLog(nodeName() + " is waiting for us");
       break;
     case GAME_WAITING_FOR_OPPONENT_TURN:
-      naraModule->setLog("waiting for " + otherNodeName);
+      naraModule->setLog("waiting for " + nodeName());
       break;
     case GAME_CHECKING_WHO_WON:
       naraModule->setLog("checking who won...");
       break;
     case GAME_WON:
-      naraModule->setLog("WON game! " + String(ourSignature) + " vs " + String(theirSignature));
+      naraModule->setLog("WON! " + String(ourSignature) + " vs " + String(theirSignature));
       break;
     case GAME_LOST:
       naraModule->setLog("lost game: " + String(ourSignature) + " vs " + String(theirSignature));
       break;
     case GAME_DRAW:
-      naraModule->setLog("draw game w/" + otherNodeName);
+      naraModule->setLog("DRAW game w/" + nodeName());
       break;
     case GAME_ABANDONED:
       //naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");
@@ -119,7 +122,7 @@ int NaraEntry::processNextStep() {
 
   // don't spam logs
   if(now - lastInteraction <= GAME_GHOST_TTL) {
-    LOG_INFO("node %0x is in status %s\n", nodeNum, getStatusString().c_str());
+    LOG_DEBUG("node %0x is in status %s\n", nodeNum, getStatusString().c_str());
   }
 
   if (status == UNCONTACTED) {
