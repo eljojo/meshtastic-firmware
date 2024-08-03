@@ -27,6 +27,7 @@ class NaraEntry {
     char theirText[32];
     uint32_t ourSignature;
     uint32_t theirSignature;
+    int lastSignatureCounter;
 
     NaraEntry() : lastInteraction(0), nodeNum(0), status(UNCONTACTED) {}
 
@@ -65,6 +66,7 @@ class NaraEntry {
 
       ourSignature = 0;
       theirSignature = 0;
+      lastSignatureCounter = 0;
     }
 
     bool isGameInProgress() {

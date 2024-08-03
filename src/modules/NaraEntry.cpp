@@ -145,7 +145,15 @@ bool NaraEntry::processNextStep() {
       snprintf(haikuText, sizeof(haikuText), "%s/%s/%0x", theirText, ourText, localNodeNum);
     }
 
-    ourSignature = crypto->performHashcash(haikuText, NUM_ZEROES, MAX_HASHCASH);
+    ourSignature = crypto->performHashcash(haikuText, NUM_ZEROES, lastSignatureCounter, MAX_HASHCASH);
+    if(ourSignature == 0) {
+      // we couldn't find a hash in MAX_HASHCASH iterations
+      // we'll try again next time
+      lastSignatureCounter += MAX_HASHCASH;
+      //naraModule->setLog("still thinking turn...");
+      return true;
+    }
+
     sendGameMove(nodeNum, haikuText, ourSignature);
 
     if(status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US) {
