@@ -80,14 +80,15 @@ bool NaraModule::wantUIFrame()
   return true;
 }
 
-bool NaraModule::messageNextNode()
+int NaraModule::messageNextNode()
 {
   for (auto& entry : naraDatabase) {
-    if(entry.second.processNextStep()) {
-      return true;
+    int entryResult = entry.second.processNextStep();
+    if(entryResult > 0) {
+      return entryResult;
     }
   }
-  return false;
+  return 0;
 }
 
 int32_t NaraModule::runOnce()
@@ -102,13 +103,17 @@ int32_t NaraModule::runOnce()
     hashMessage = String("Hello ") + String(owner.long_name);
 
     screenLog = String("Hello ") + String(owner.long_name);
-    return random(5 * 1000, 20 * 1000); // run again in 5-10 seconds
+    return random(5 * 1000, 20 * 1000); // run again in 5-20 seconds
   }
 
   updateNodeCount();
-  messageNextNode();
+  int suggestedDelay = messageNextNode();
 
-  return random(5 * 1000, 15 * 1000); // run again in 5-10 seconds
+  if (suggestedDelay > 1) {
+    return suggestedDelay;
+  }
+
+  return random(5 * 1000, 10 * 1000); // run again in 5-10 seconds
 }
 
 // used for debugging

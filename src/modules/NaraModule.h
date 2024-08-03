@@ -34,7 +34,7 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
     int nodeCount = 0;
 
     void updateNodeCount();
-    bool messageNextNode();
+    int messageNextNode();
 
     String getLongMessage();
 

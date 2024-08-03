@@ -35,13 +35,14 @@ class NaraEntry {
       this->nodeNum = nodeNum;
       this->status = status;
       this->lastInteraction = millis(); // or use time(nullptr) for actual time
+      resetGame();
     }
 
     void handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm);
 
     void checkWhoWon();
 
-    bool processNextStep();
+    int processNextStep();
 
     bool sendGameInvite(NodeNum dest, char* haikuText);
     bool sendGameAccept(NodeNum dest, char* haikuText);

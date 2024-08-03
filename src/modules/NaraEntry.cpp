@@ -2,8 +2,9 @@
 #include "NaraModule.h"
 #include "ProtobufModule.h"
 
-#define NUM_ZEROES 4                   // for hashcash
-#define MAX_HASHCASH 10000             // max iterations
+#define NUM_ZEROES 4                    // for hashcash
+#define HASH_TURN_SIZE 1000             // size of hashcash turn before yielding thread
+#define MAX_HASHCASH 100000             // give up game after these many iterations
 #define GAME_GHOST_TTL 60000           // assume ghosted after 60 seconds
 #define DRAW_RETRY_TIME_MS 5000            // retry in 5 seconds in case of draw
 
@@ -108,7 +109,7 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
   LOG_INFO("NARA node %0x is now in status %s\n", nodeNum, getStatusString().c_str());
 }
 
-bool NaraEntry::processNextStep() {
+int NaraEntry::processNextStep() {
   uint32_t now = millis();
 
   // don't spam logs
@@ -124,7 +125,7 @@ bool NaraEntry::processNextStep() {
     sendGameInvite(nodeNum, ourText);
     setStatus(GAME_INVITE_SENT);
 
-    return true;
+    return 1;
   } else if (status == GAME_INVITE_RECEIVED) {
     // send game invite and set haiku to random number
     snprintf(ourText, sizeof(ourText), "%d", random(10000));
@@ -133,7 +134,7 @@ bool NaraEntry::processNextStep() {
     sendGameAccept(nodeNum, ourText);
     setStatus(GAME_ACCEPTED);
 
-    return true;
+    return 1;
   } else if (status == GAME_ACCEPTED || status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US) {
     NodeNum localNodeNum = nodeDB->getNodeNum();
 
@@ -145,13 +146,13 @@ bool NaraEntry::processNextStep() {
       snprintf(haikuText, sizeof(haikuText), "%s/%s/%0x", theirText, ourText, localNodeNum);
     }
 
-    ourSignature = crypto->performHashcash(haikuText, NUM_ZEROES, lastSignatureCounter, MAX_HASHCASH);
-    if(ourSignature == 0) {
-      // we couldn't find a hash in MAX_HASHCASH iterations
-      // we'll try again next time
-      lastSignatureCounter += MAX_HASHCASH;
+    ourSignature = crypto->performHashcash(haikuText, NUM_ZEROES, lastSignatureCounter, HASH_TURN_SIZE);
+    if(ourSignature == 0 && lastSignatureCounter <= MAX_HASHCASH) {
+      // we couldn't find a hash in HASH_TURN_SIZE iterations, we'll try again next time
+      lastSignatureCounter += HASH_TURN_SIZE;
       //naraModule->setLog("still thinking turn...");
-      return true;
+      lastInteraction = now;
+      return 100;
     }
 
     sendGameMove(nodeNum, haikuText, ourSignature);
@@ -164,17 +165,18 @@ bool NaraEntry::processNextStep() {
       setStatus(GAME_WAITING_FOR_OPPONENT_TURN);
     }
 
-    return true;
+    return 1;
   }else if((status == GAME_DRAW && now - lastInteraction > DRAW_RETRY_TIME_MS) || (status == GAME_ABANDONED && now - lastInteraction > DRAW_RETRY_TIME_MS)) {
     setStatus(UNCONTACTED);
     naraModule->setLog("will play again w/" + String(nodeNum, HEX));
-    return true;
+    return random(5 * 1000, 20 * 1000);
   } else if(isGameInProgress() && now - lastInteraction > GAME_GHOST_TTL) {
     setStatus(GAME_ABANDONED);
     naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");
-    return true;
+    return 1;
   }
-  return false;
+
+  return 0;
 }
 
 void NaraEntry::checkWhoWon() {
