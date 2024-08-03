@@ -1,3 +1,4 @@
+#include "NaraEntry.h"
 #include "NaraModule.h"
 #include "MeshService.h"
 #include "configuration.h"
@@ -16,98 +17,32 @@ NaraModule *naraModule;
 #define NUM_ZEROES 4                  // for hashcash
 
 
-bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *nara_message)
+bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *nm)
 {
   LOG_INFO(
-      "NARA Received message from=0x%0x, id=%d, haiku_text=%s, haiku_signature=%d, msg_type=%d\n",
-      mp.from, mp.id, nara_message->haiku.text, nara_message->haiku.signature, nara_message->type
+      "NARA Received Haiku from=0x%0x, id=%d, text=\"%s\", signature=%d, msg_type=%d\n",
+      mp.from, mp.id, nm->haiku.text, nm->haiku.signature, nm->type
   );
 
-  if (nara_message->haiku.signature > 0) {
-    if (crypto->checkHashcash(nara_message->haiku.text, nara_message->haiku.signature, NUM_ZEROES)) {
-      LOG_DEBUG("NARA Signature verified\n");
+  if (nm->haiku.signature > 0) {
+    if (crypto->checkHashcash(nm->haiku.text, nm->haiku.signature, NUM_ZEROES)) {
+      LOG_DEBUG("NARA Haiku Signature verified\n");
     } else {
-      LOG_INFO("NARA Signature verification failed\n");
-      return false;
+      LOG_WARN("NARA Haiku Signature verification failed\n");
+      setLog("received invalid haiku");
+      return true; // ignore this message
     }
   }
 
-  if (nara_message->type == meshtastic_NaraMessage_MessageType_GREETING) {
-    if (naraDatabase.find(mp.from) != naraDatabase.end()) {
-      screenLog = "0x" + String(mp.from, HEX) + " says hi again";
-      naraDatabase[mp.from].status = GREETING_RECEIVED;
-    } else {
-      screenLog = "0x" + String(mp.from, HEX) + " says hi";
-      naraDatabase[mp.from] = {GREETING_RECEIVED};
-    }
-
-    return true;
-  } else if (nara_message->type == meshtastic_NaraMessage_MessageType_PRESENT) {
-    if (naraDatabase.find(mp.from) != naraDatabase.end()) {
-      if(naraDatabase[mp.from].status == GREETING_SENT) {
-        naraDatabase[mp.from].status = PRESENT_RECEIVED;
-        screenLog = "0x" + String(mp.from, HEX) + " sent a haiku";
-      }else{
-        // screenLog = "0x" + String(mp.from, HEX) + " sent a new haiku";
-        LOG_WARN("Nara sent valid present but we weren't expecting it. current_status=%d\n", naraDatabase[mp.from].status);
-      }
-    } else {
-      screenLog = String("unexpected haiku from 0x") + String(mp.from, HEX);
-      LOG_WARN("Nara sent valid present but we hadn't seen greeting\n");
-      // naraDatabase[mp.from] = {PRESENT_RECEIVED};
-    }
-
-    return true;
+  if (naraDatabase.find(mp.from) == naraDatabase.end()) {
+    LOG_DEBUG("added entry to database\n");
+    naraDatabase[mp.from] = NaraEntry(mp.from, UNCONTACTED);
   }
 
-  return false;
-}
+  NaraEntry &entry = naraDatabase[mp.from];
+  entry.handleMeshPacket(mp, nm);
 
-bool NaraModule::sendGreeting(NodeNum dest)
-{
-    meshtastic_NaraMessage_Haiku haiku = meshtastic_NaraMessage_Haiku_init_default;
-    strncpy(haiku.text, hashMessage.c_str(), sizeof(hashMessage));
-
-    meshtastic_NaraMessage nara_message = meshtastic_NaraMessage_init_default;
-    nara_message.type = meshtastic_NaraMessage_MessageType_GREETING;
-    nara_message.has_haiku = true;
-    nara_message.haiku = haiku;
-
-    meshtastic_MeshPacket *p = allocDataProtobuf(nara_message);
-    p->to = dest;
-    p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
-
-    LOG_INFO("NARA Sending greeting to=0x%0x, id=%d, haiku_text=%s,haiku_signature=%d,msg_type=%d\n", p->to, p->id, nara_message.haiku.text, nara_message.haiku.signature, nara_message.type);
-    service.sendToMesh(p, RX_SRC_LOCAL, true);
-
-    screenLog = "found 0x" + String(p->to, HEX);
-
-    return true;
-}
-
-bool NaraModule::sendPresent(NodeNum dest)
-{
-    // screenLog = "prep gift for 0x" + String(dest, HEX);
-
-    meshtastic_NaraMessage_Haiku haiku = meshtastic_NaraMessage_Haiku_init_default;
-    strncpy(haiku.text, hashMessage.c_str(), sizeof(hashMessage));
-    haiku.signature = crypto->performHashcash(haiku.text, NUM_ZEROES);
-
-    meshtastic_NaraMessage nara_message = meshtastic_NaraMessage_init_default;
-    nara_message.type = meshtastic_NaraMessage_MessageType_PRESENT;
-    nara_message.has_haiku = true;
-    nara_message.haiku = haiku;
-
-    meshtastic_MeshPacket *p = allocDataProtobuf(nara_message);
-    p->to = dest;
-    p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
-
-    LOG_INFO("NARA Sending present to=0x%0x, id=%d, haiku_text=%s,haiku_signature=%d,msg_type=%d\n", p->to, p->id, nara_message.haiku.text, nara_message.haiku.signature, nara_message.type);
-    service.sendToMesh(p, RX_SRC_LOCAL, true);
-
-    screenLog = "friends with 0x" + String(p->to, HEX);
-
-    return true;
+  return true;
 }
 
 void NaraModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y)
@@ -134,6 +69,11 @@ void NaraModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int1
   return;
 }
 
+void NaraModule::setLog(String log)
+{
+  screenLog = log;
+}
+
 bool NaraModule::wantUIFrame()
 {
   return true;
@@ -142,15 +82,9 @@ bool NaraModule::wantUIFrame()
 bool NaraModule::messageNextNode()
 {
   for (auto& entry : naraDatabase) {
-    if (entry.second.status == UNCONTACTED) {
-      LOG_INFO("node %0x is UNCONTACTED, messaging now\n", entry.first);
-      entry.second.status = GREETING_SENT;
-      sendGreeting(entry.first);
-      return true;
-    }else if (entry.second.status == GREETING_RECEIVED || entry.second.status == PRESENT_RECEIVED) {
-      LOG_INFO("node %0x is waiting for a present, sending now\n", entry.first);
-      entry.second.status = PRESENT_SENT;
-      sendPresent(entry.first);
+    LOG_INFO("node %0x is in status %s\n", entry.first, entry.second.getStatusString().c_str());
+    if(entry.second.processNextStep()) {
+      LOG_INFO("node %0x is now in status %s\n", entry.first, entry.second.getStatusString().c_str());
       return true;
     }
   }
@@ -169,13 +103,13 @@ int32_t NaraModule::runOnce()
     hashMessage = String("Hello ") + String(owner.long_name);
 
     screenLog = String("Hello ") + String(owner.long_name);
-    return 10000 + random(20000); // run again in 10-30 seconds
+    return random(5000) + random(5 * 1000); // run again in 10 seconds
   }
 
   updateNodeCount();
   messageNextNode();
 
-  return 10 * 1000 + random(10 * 1000);
+  return random(5 * 1000);
 }
 
 // used for debugging
@@ -201,14 +135,36 @@ void NaraModule::updateNodeCount()
 
       // Maintain the NaraEntry database
       if (naraDatabase.find(node->num) == naraDatabase.end()) {
-        naraDatabase[node->num] = {UNCONTACTED};
+        naraDatabase[node->num] = NaraEntry(node->num, UNCONTACTED);
       }
     }
   }
 
-  LOG_DEBUG("[NARA] nodeCount=%u\n", nodeCount);
+  //LOG_DEBUG("[NARA] nodeCount=%u\n", nodeCount);
 
   closestNodes = getClosestNodeNames(MAX_CLOSEST_NODES);
+}
+
+bool NaraModule::sendHaiku(NodeNum dest, char* haikuText, _meshtastic_NaraMessage_MessageType messageType, int signature = 0) {
+  meshtastic_NaraMessage_Haiku haiku = meshtastic_NaraMessage_Haiku_init_default;
+  strncpy(haiku.text, haikuText, sizeof(haiku.text) - 1);
+  haiku.text[sizeof(haiku.text) - 1] = '\0';
+
+  haiku.signature = signature;
+
+  meshtastic_NaraMessage nm = meshtastic_NaraMessage_init_default;
+  nm.type = messageType;
+  nm.has_haiku = true;
+  nm.haiku = haiku;
+
+  meshtastic_MeshPacket *p = allocDataProtobuf(nm);
+  p->to = dest;
+  p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
+
+  LOG_INFO("NARA Sending haiku to=0x%0x, id=%d, haiku_text=\"%s\",haiku_signature=%d,msg_type=%d\n", p->to, p->id, nm.haiku.text, nm.haiku.signature, nm.type);
+  service.sendToMesh(p, RX_SRC_LOCAL, true);
+
+  return true;
 }
 
 String NaraModule::getClosestNodeNames(int maxNodes)
@@ -282,14 +238,10 @@ String NaraModule::getLongMessage()
   int points = 0;
   int naraSeen = 0;
   for (auto& entry : naraDatabase) {
-    if (entry.second.status == GREETING_SENT) {
-      points += 1;
-    } else if (entry.second.status == GREETING_RECEIVED || entry.second.status == PRESENT_RECEIVED) {
-      points += 2;
-      naraSeen += 1;
-    } else if (entry.second.status == PRESENT_SENT) {
-      points += 3;
-      naraSeen += 1;
+    // call getPoints and increase nara seen if larger than 1
+    points += entry.second.getPoints();
+    if (entry.second.getPoints() > 1) {
+      naraSeen++;
     }
   }
 

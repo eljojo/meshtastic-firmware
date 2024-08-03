@@ -1,22 +1,11 @@
 #pragma once
 #include "ProtobufModule.h"
+#include "NaraEntry.h"
 #include "mesh/generated/meshtastic/nara.pb.h"
 
 #include <OLEDDisplay.h>
 #include <OLEDDisplayUi.h>
 #include <map>
-
-enum NaraEntryStatus {
-    UNCONTACTED,
-    GREETING_SENT,
-    GREETING_RECEIVED,
-    PRESENT_RECEIVED,
-    PRESENT_SENT
-};
-
-struct NaraEntry {
-    NaraEntryStatus status;
-};
 
 class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtastic_NaraMessage>
 {
@@ -30,14 +19,13 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
     virtual void drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y) override;
 #endif
 
+    void setLog(String log);
     bool handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *r) override;
+    bool sendHaiku(NodeNum dest, char* haikuText, _meshtastic_NaraMessage_MessageType messageType, int signature);
 
     String getNaraMessage(int16_t y);
     String getShortMessage();
     String getClosestNodeNames(int maxNodes);
-
-    bool sendGreeting(NodeNum dest = NODENUM_BROADCAST);
-    bool sendPresent(NodeNum dest = NODENUM_BROADCAST);
 
   protected:
     bool firstTime = 1;
