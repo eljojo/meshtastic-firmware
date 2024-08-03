@@ -11,8 +11,10 @@
 
 /* Enum definitions */
 typedef enum _meshtastic_NaraMessage_MessageType {
-    meshtastic_NaraMessage_MessageType_GREETING = 0,
-    meshtastic_NaraMessage_MessageType_PRESENT = 1
+    meshtastic_NaraMessage_MessageType_HELLO = 0,
+    meshtastic_NaraMessage_MessageType_GAME_INVITE = 1,
+    meshtastic_NaraMessage_MessageType_GAME_ACCEPT = 2,
+    meshtastic_NaraMessage_MessageType_GAME_TURN = 3
 } meshtastic_NaraMessage_MessageType;
 
 /* Struct definitions */
@@ -33,9 +35,9 @@ extern "C" {
 #endif
 
 /* Helper constants for enums */
-#define _meshtastic_NaraMessage_MessageType_MIN meshtastic_NaraMessage_MessageType_GREETING
-#define _meshtastic_NaraMessage_MessageType_MAX meshtastic_NaraMessage_MessageType_PRESENT
-#define _meshtastic_NaraMessage_MessageType_ARRAYSIZE ((meshtastic_NaraMessage_MessageType)(meshtastic_NaraMessage_MessageType_PRESENT+1))
+#define _meshtastic_NaraMessage_MessageType_MIN meshtastic_NaraMessage_MessageType_HELLO
+#define _meshtastic_NaraMessage_MessageType_MAX meshtastic_NaraMessage_MessageType_GAME_TURN
+#define _meshtastic_NaraMessage_MessageType_ARRAYSIZE ((meshtastic_NaraMessage_MessageType)(meshtastic_NaraMessage_MessageType_GAME_TURN+1))
 
 #define meshtastic_NaraMessage_type_ENUMTYPE meshtastic_NaraMessage_MessageType
 
