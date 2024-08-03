@@ -47,6 +47,9 @@ void NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_Nar
       setStatus(GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US);
     } else {
       LOG_WARN("NARA Received game turn from 0x%0x, but we're not waiting for it. We're in status=%s\n", nodeNum, getStatusString().c_str());
+      setStatus(GAME_ABANDONED);
+      resetGame();
+      naraModule->setLog("uh-oh! " + String(nodeNum, HEX));
     }
   }else{
     LOG_WARN("NARA Received unexpected message from 0x%0x, type=%d. We're in status=%s\n", nodeNum, nm->type, getStatusString().c_str());
@@ -73,7 +76,11 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       naraModule->setLog(String(nodeNum, HEX) + " wants to play");
       break;
     case GAME_ACCEPTED:
-      naraModule->setLog("thinking turn...");
+      if(nodeDB->getNodeNum() < nodeNum) {
+        naraModule->setLog("thinking turn... " + ourText + "/" + theirText);
+      } else {
+        naraModule->setLog("thinking turn... " + theirText + "/" + ourText);
+      }
       break;
     case GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US:
       naraModule->setLog(String(nodeNum, HEX) + " is waiting for us");
@@ -94,7 +101,7 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       naraModule->setLog("draw game w/" + String(nodeNum, HEX));
       break;
     case GAME_ABANDONED:
-      naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");
+      //naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");
       break;
   }
 
@@ -150,12 +157,13 @@ bool NaraEntry::processNextStep() {
     }
 
     return true;
-  }else if(status == GAME_DRAW && now - lastInteraction > DRAW_RETRY_TIME_MS) {
+  }else if((status == GAME_DRAW && now - lastInteraction > DRAW_RETRY_TIME_MS) || (status == GAME_ABANDONED && now - lastInteraction > GAME_GHOST_TTL) {
     setStatus(UNCONTACTED);
     naraModule->setLog("will play again w/" + String(nodeNum, HEX));
     return true;
   } else if(isGameInProgress() && now - lastInteraction > GAME_GHOST_TTL) {
     setStatus(GAME_ABANDONED);
+    naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");
     return true;
   }
   return false;
