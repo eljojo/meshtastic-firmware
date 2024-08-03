@@ -66,15 +66,20 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
   this->status = status;
   lastInteraction = millis();
 
+  String otherNodeName = nodeDB->getMeshNode(nodeNum)->user.short_name;
+  if(otherNodeName == "") {
+    otherNodeName = String(nodeNum, HEX);
+  }
+
   switch(status) {
     case UNCONTACTED:
       // naraModule->setLog("uncontacted");
       break;
     case GAME_INVITE_SENT:
-      naraModule->setLog("invited " + String(nodeNum, HEX));
+      naraModule->setLog("invited " + otherNodeName);
       break;
     case GAME_INVITE_RECEIVED:
-      naraModule->setLog(String(nodeNum, HEX) + " wants to play");
+      naraModule->setLog(otherNodeName + " wants to play");
       break;
     case GAME_ACCEPTED:
       if(nodeDB->getNodeNum() < nodeNum) {
@@ -84,10 +89,10 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       }
       break;
     case GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US:
-      naraModule->setLog(String(nodeNum, HEX) + " is waiting for us");
+      naraModule->setLog(otherNodeName + " is waiting for us");
       break;
     case GAME_WAITING_FOR_OPPONENT_TURN:
-      naraModule->setLog("waiting for " + String(nodeNum, HEX));
+      naraModule->setLog("waiting for " + otherNodeName);
       break;
     case GAME_CHECKING_WHO_WON:
       naraModule->setLog("checking who won...");
@@ -99,7 +104,7 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       naraModule->setLog("lost game: " + String(ourSignature) + " vs " + String(theirSignature));
       break;
     case GAME_DRAW:
-      naraModule->setLog("draw game w/" + String(nodeNum, HEX));
+      naraModule->setLog("draw game w/" + otherNodeName);
       break;
     case GAME_ABANDONED:
       //naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");
