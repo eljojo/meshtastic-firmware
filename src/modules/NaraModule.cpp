@@ -20,7 +20,7 @@ NaraModule *naraModule;
 bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *nm)
 {
   LOG_INFO(
-      "NARA Received Haiku from=0x%0x, id=%d, text=\"%s\", signature=%d, msg_type=%d\n",
+      "NARA Received Haiku from=0x%0x, id=0x%0x, text=\"%s\", signature=%d, msg_type=%d\n",
       mp.from, mp.id, nm->haiku.text, nm->haiku.signature, nm->type
   );
 
@@ -71,6 +71,7 @@ void NaraModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int1
 
 void NaraModule::setLog(String log)
 {
+  LOG_INFO("%s\n", log.c_str());
   screenLog = log;
 }
 
@@ -82,9 +83,7 @@ bool NaraModule::wantUIFrame()
 bool NaraModule::messageNextNode()
 {
   for (auto& entry : naraDatabase) {
-    LOG_INFO("node %0x is in status %s\n", entry.first, entry.second.getStatusString().c_str());
     if(entry.second.processNextStep()) {
-      LOG_INFO("node %0x is now in status %s\n", entry.first, entry.second.getStatusString().c_str());
       return true;
     }
   }
@@ -103,13 +102,13 @@ int32_t NaraModule::runOnce()
     hashMessage = String("Hello ") + String(owner.long_name);
 
     screenLog = String("Hello ") + String(owner.long_name);
-    return random(5000) + random(5 * 1000); // run again in 10 seconds
+    return random(5 * 1000, 10 * 1000); // run again in 5-10 seconds
   }
 
   updateNodeCount();
   messageNextNode();
 
-  return random(5 * 1000);
+  return random(5 * 1000, 10 * 1000); // run again in 5-10 seconds
 }
 
 // used for debugging
@@ -130,7 +129,8 @@ void NaraModule::updateNodeCount()
     // only enable for these debug nodes
     if (node->num != NARA2 && node->num != NARA6) continue;
 
-    if (node->num != localNodeNum && sinceLastSeen(node) < NUM_ONLINE_SECS && !node->via_mqtt) {
+    //if (node->num != localNodeNum && sinceLastSeen(node) < NUM_ONLINE_SECS && !node->via_mqtt) {
+    if (node->num != localNodeNum && !node->via_mqtt) {
       nodeCount++;
 
       // Maintain the NaraEntry database
@@ -161,7 +161,7 @@ bool NaraModule::sendHaiku(NodeNum dest, char* haikuText, _meshtastic_NaraMessag
   p->to = dest;
   p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
 
-  LOG_INFO("NARA Sending haiku to=0x%0x, id=%d, haiku_text=\"%s\",haiku_signature=%d,msg_type=%d\n", p->to, p->id, nm.haiku.text, nm.haiku.signature, nm.type);
+  LOG_INFO("NARA Sending haiku to=0x%0x, id=0x%0x, haiku_text=\"%s\",haiku_signature=%d,msg_type=%d\n", p->to, p->id, nm.haiku.text, nm.haiku.signature, nm.type);
   service.sendToMesh(p, RX_SRC_LOCAL, true);
 
   return true;

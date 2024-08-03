@@ -56,7 +56,7 @@ class CryptoEngine
      * @param numZeros Number of trailing zeros required in the hash.
      * @return The counter value when the required hash is found.
      */
-    virtual int performHashcash(const char* seed, int numZeros);
+    virtual int performHashcash(const char* seed, int numZeros, int maxCounter);
 
     virtual void calculateHash(unsigned char* hash, const char* seed, int counter);
 

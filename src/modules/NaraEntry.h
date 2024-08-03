@@ -9,9 +9,12 @@ enum NaraEntryStatus {
   GAME_INVITE_SENT, // waiting to accept
   GAME_INVITE_RECEIVED, // waiting to respond
   GAME_ACCEPTED, // waiting to "do our turn"
+  GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US,
   GAME_WAITING_FOR_OPPONENT_TURN,
+  GAME_CHECKING_WHO_WON,
   GAME_WON,
   GAME_LOST,
+  GAME_DRAW,
   GAME_ABANDONED
 };
 
@@ -44,11 +47,11 @@ class NaraEntry {
     bool sendGameMove(NodeNum dest, char* haikuText, int signature);
 
     int getPoints() {
-      if(status == GAME_WON) {
+      if(status == GAME_WON || status == GAME_DRAW) {
         return 3;
       } else if(status == GAME_LOST) {
         return 2;
-      } else if(status == GAME_ABANDONED || status == UNCONTACTED || status == GAME_INVITE_SENT) {
+      } else if(status == UNCONTACTED || status == GAME_INVITE_SENT) {
         return 0;
       } else {
         return 1;
@@ -64,6 +67,10 @@ class NaraEntry {
       theirSignature = 0;
     }
 
+    bool isGameInProgress() {
+      return status == GAME_ACCEPTED || status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US || status == GAME_WAITING_FOR_OPPONENT_TURN || status == GAME_CHECKING_WHO_WON;
+    }
+
     String getStatusString() {
       switch(status) {
         case UNCONTACTED:
@@ -74,16 +81,25 @@ class NaraEntry {
           return "GAME_INVITE_RECEIVED";
         case GAME_ACCEPTED:
           return "GAME_ACCEPTED";
+        case GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US:
+          return "OPPONENT_IS_WAITING_FOR_US";
         case GAME_WAITING_FOR_OPPONENT_TURN:
-          return "GAME_WAITING_FOR_OPPONENT_TURN";
+          return "WAITING_FOR_OPPONENT";
+        case GAME_CHECKING_WHO_WON:
+          return "CHECKING_WHO_WON";
         case GAME_WON:
           return "GAME_WON";
         case GAME_LOST:
           return "GAME_LOST";
+        case GAME_DRAW:
+          return "GAME_DRAW";
         case GAME_ABANDONED:
           return "GAME_ABANDONED";
         default:
           return "UNKNOWN";
       }
     }
+
+  protected:
+    void setStatus(NaraEntryStatus status);
 };

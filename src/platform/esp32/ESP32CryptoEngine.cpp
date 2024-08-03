@@ -85,7 +85,7 @@ class ESP32CryptoEngine : public CryptoEngine
      * @param numZeros Number of trailing zeros required in the hash.
      * @return The counter value when the required hash is found.
      */
-    int performHashcash(const char* seed, int numZeros)
+    int performHashcash(const char* seed, int numZeros, int maxCounter)
     {
       char input[128];
       unsigned char hash[32];
@@ -105,11 +105,22 @@ class ESP32CryptoEngine : public CryptoEngine
 
         // Check if hash ends with the required number of zeros
         if (hashEndsWithZeros(hash, numTrailingBits)) {
-          LOG_INFO("Proof found! Seed: %s, Counter: %d\n", seed, counter);
+          char hashString[65];  // 64 hex digits + null terminator
+          // Convert hash to a hex string
+          for (int i = 0; i < 32; i++) {
+            sprintf(&hashString[i * 2], "%02x", hash[i]);
+          }
+
+          LOG_INFO("Proof found! input: \"%s\", Hash: %s\n", input, hashString);
           return counter;
         }
 
         counter++;
+
+        if (maxCounter > 0 && counter >= maxCounter) {
+          LOG_INFO("No hash found for seed: \"%s\"\n", seed);
+          return 0;
+        }
       }
     }
 
