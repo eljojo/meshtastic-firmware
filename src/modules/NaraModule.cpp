@@ -102,13 +102,13 @@ int32_t NaraModule::runOnce()
     hashMessage = String("Hello ") + String(owner.long_name);
 
     screenLog = String("Hello ") + String(owner.long_name);
-    return random(5 * 1000, 10 * 1000); // run again in 5-10 seconds
+    return random(5 * 1000, 20 * 1000); // run again in 5-10 seconds
   }
 
   updateNodeCount();
   messageNextNode();
 
-  return random(5 * 1000, 10 * 1000); // run again in 5-10 seconds
+  return random(5 * 1000, 15 * 1000); // run again in 5-10 seconds
 }
 
 // used for debugging

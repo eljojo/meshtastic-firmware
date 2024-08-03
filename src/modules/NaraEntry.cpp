@@ -49,14 +49,14 @@ void NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_Nar
       LOG_WARN("NARA Received game turn from 0x%0x, but we're not waiting for it. We're in status=%s\n", nodeNum, getStatusString().c_str());
       setStatus(GAME_ABANDONED);
       resetGame();
-      naraModule->setLog("uh-oh! " + String(nodeNum, HEX));
+      naraModule->setLog(String("uh-oh! ") + String(nodeNum, HEX));
     }
   }else{
     LOG_WARN("NARA Received unexpected message from 0x%0x, type=%d. We're in status=%s\n", nodeNum, nm->type, getStatusString().c_str());
     if(isGameInProgress()) {
       setStatus(GAME_ABANDONED);
       resetGame();
-      naraModule->setLog("uh-oh! " + String(nodeNum, HEX));
+      naraModule->setLog(String("uh-oh! ") + String(nodeNum, HEX));
     }
   }
 }
@@ -77,9 +77,9 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       break;
     case GAME_ACCEPTED:
       if(nodeDB->getNodeNum() < nodeNum) {
-        naraModule->setLog("thinking turn... " + ourText + "/" + theirText);
+        naraModule->setLog(String("thinking turn... ") + String(ourText) + "/" + String(theirText));
       } else {
-        naraModule->setLog("thinking turn... " + theirText + "/" + ourText);
+        naraModule->setLog(String("thinking turn... ") + String(theirText) + "/" + String(ourText));
       }
       break;
     case GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US:
@@ -157,7 +157,7 @@ bool NaraEntry::processNextStep() {
     }
 
     return true;
-  }else if((status == GAME_DRAW && now - lastInteraction > DRAW_RETRY_TIME_MS) || (status == GAME_ABANDONED && now - lastInteraction > GAME_GHOST_TTL) {
+  }else if((status == GAME_DRAW && now - lastInteraction > DRAW_RETRY_TIME_MS) || (status == GAME_ABANDONED && now - lastInteraction > DRAW_RETRY_TIME_MS)) {
     setStatus(UNCONTACTED);
     naraModule->setLog("will play again w/" + String(nodeNum, HEX));
     return true;
