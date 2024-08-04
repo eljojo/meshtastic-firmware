@@ -81,6 +81,7 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       break;
     case GAME_INVITE_SENT:
       naraModule->setLog("invited " + nodeName());
+      inviteSent = true;
       break;
     case GAME_INVITE_RECEIVED:
       naraModule->setLog(nodeName() + " wants to play");
@@ -103,12 +104,15 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       break;
     case GAME_WON:
       naraModule->setLog("WON! " + String(ourSignature) + " vs " + String(theirSignature));
+      winCount++;
       break;
     case GAME_LOST:
       naraModule->setLog("lost game: " + String(ourSignature) + " vs " + String(theirSignature));
+      loseCount++;
       break;
     case GAME_DRAW:
       naraModule->setLog("DRAW game w/" + nodeName());
+      drawCount++;
       break;
     case GAME_ABANDONED:
       //naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");

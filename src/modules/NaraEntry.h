@@ -28,6 +28,10 @@ class NaraEntry {
     uint32_t ourSignature;
     uint32_t theirSignature;
     int lastSignatureCounter;
+    int winCount = 0;
+    int loseCount = 0;
+    int drawCount = 0;
+    bool inviteSent = false;
 
     NaraEntry() : lastInteraction(0), nodeNum(0), status(UNCONTACTED) {}
 
@@ -49,15 +53,8 @@ class NaraEntry {
     bool sendGameMove(NodeNum dest, char* haikuText, int signature);
 
     int getPoints() {
-      if(status == GAME_WON || status == GAME_DRAW) {
-        return 3;
-      } else if(status == GAME_LOST) {
-        return 2;
-      } else if(status == UNCONTACTED || status == GAME_INVITE_SENT) {
-        return 0;
-      } else {
-        return 1;
-      }
+      int invitePoints = inviteSent ? 1 : 0;
+      return winCount * 3 + drawCount * 5 + loseCount + invitePoints;
     }
 
     void resetGame() {
