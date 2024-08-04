@@ -228,6 +228,17 @@ String NaraModule::getClosestNodeNames(int maxNodes)
     return nodeNames;
 }
 
+int NaraModule::gamesInProgress()
+{
+  int games = 0;
+  for (auto& entry : naraDatabase) {
+    if (entry.second.isGameInProgress()) {
+      games++;
+    }
+  }
+  return games;
+}
+
 String NaraModule::getShortMessage()
 {
   if (nodeCount <= 2) {

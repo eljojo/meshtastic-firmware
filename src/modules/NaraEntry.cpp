@@ -9,32 +9,33 @@
 #define DRAW_RETRY_TIME_MS 5000            // retry in 5 seconds in case of draw
 #define PLAY_EVERY_MS 2 * 60 * 1000        // play new game every 2 minutes
 
-bool NaraEntry::sendGameInvite(NodeNum dest, char* haikuText) {
-  return naraModule->sendHaiku(dest, haikuText, meshtastic_NaraMessage_MessageType_GAME_INVITE, 0);
-}
-
-bool NaraEntry::sendGameAccept(NodeNum dest, char* haikuText) {
-  return naraModule->sendHaiku(dest, haikuText, meshtastic_NaraMessage_MessageType_GAME_ACCEPT, 0);
-}
-
-bool NaraEntry::sendGameMove(NodeNum dest, char* haikuText, int signature) {
-  return naraModule->sendHaiku(dest, haikuText, meshtastic_NaraMessage_MessageType_GAME_TURN, signature);
-}
-
 void NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm) {
-  if(nm->type == meshtastic_NaraMessage_MessageType_GAME_INVITE) {
-    resetGame();
-
-    strncpy(theirText, nm->haiku.text, sizeof(theirText) - 1);
-    theirText[sizeof(theirText) - 1] = '\0';
-
-    setStatus(GAME_INVITE_RECEIVED);
-  } else if(nm->type == meshtastic_NaraMessage_MessageType_GAME_ACCEPT && status == GAME_INVITE_SENT) {
-    strncpy(theirText, nm->haiku.text, sizeof(theirText) - 1);
-    theirText[sizeof(theirText) - 1] = '\0';
-
-    setStatus(GAME_ACCEPTED);
+  if(nm->type == meshtastic_NaraMessage_MessageType_GAME_INVITE || nm->type == meshtastic_NaraMessage_MessageType_GAME_ACCEPT) {
+    acceptGame(nm);
   } else if(nm->type == meshtastic_NaraMessage_MessageType_GAME_TURN) {
+    processOtherTurn(nm);
+  } else {
+    LOG_WARN("NARA Received unexpected message from 0x%0x, type=%d. We're in status=%s\n", nodeNum, nm->type, getStatusString().c_str());
+    if(isGameInProgress()) {
+      abandonWeirdGame();
+    }
+  }
+}
+
+void NaraEntry::acceptGame(meshtastic_NaraMessage* nm) {
+  if(status != GAME_INVITE_SENT) resetGame();
+
+  strncpy(theirText, nm->haiku.text, sizeof(theirText) - 1);
+  theirText[sizeof(theirText) - 1] = '\0';
+
+  if(nm->type == meshtastic_NaraMessage_MessageType_GAME_ACCEPT && status == GAME_INVITE_SENT) {
+    setStatus(GAME_ACCEPTED);
+  } else {
+    setStatus(GAME_INVITE_RECEIVED);
+  }
+}
+
+void NaraEntry::processOtherTurn(meshtastic_NaraMessage* nm) {
     theirSignature = nm->haiku.signature;
 
     // TODO: check if their text is the same as our text (minus node num)
@@ -51,26 +52,8 @@ void NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_Nar
     // looks like we missed the packet when the game was accepted, we can still try decoding the other nara's move and continue playing
     } else {
       LOG_WARN("NARA Received game turn from 0x%0x, but we're not waiting for it. We're in status=%s\n", nodeNum, getStatusString().c_str());
-      setStatus(GAME_ABANDONED);
-      resetGame();
-      naraModule->setLog(String("uh-oh! ") + String(nodeNum, HEX));
+      abandonWeirdGame();
     }
-  }else{
-    LOG_WARN("NARA Received unexpected message from 0x%0x, type=%d. We're in status=%s\n", nodeNum, nm->type, getStatusString().c_str());
-    if(isGameInProgress()) {
-      setStatus(GAME_ABANDONED);
-      resetGame();
-      naraModule->setLog(String("uh-oh! ") + String(nodeNum, HEX));
-    }
-  }
-}
-
-String NaraEntry::nodeName() {
-  String otherNodeName = nodeDB->getMeshNode(nodeNum)->user.short_name;
-  if(otherNodeName == "") {
-    otherNodeName = String(nodeNum, HEX);
-  }
-  return otherNodeName;
 }
 
 void NaraEntry::setStatus(NaraEntryStatus status) {
@@ -132,83 +115,107 @@ int NaraEntry::processNextStep() {
     LOG_DEBUG("node %0x is in status %s\n", nodeNum, getStatusString().c_str());
   }
 
-  if (status == UNCONTACTED) {
-    // send game invite and set haiku to random number
-    snprintf(ourText, sizeof(ourText), "%d", random(10000));
-    ourText[31] = '\0';
+  if (status == UNCONTACTED || status == GAME_INVITE_RECEIVED) {
+    return startGame();
+  }
 
-    sendGameInvite(nodeNum, ourText);
-    setStatus(GAME_INVITE_SENT);
+  if (status == GAME_ACCEPTED || status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US) {
+    return playGameTurn();
+  }
 
-    return 1;
-  } else if (status == GAME_INVITE_RECEIVED) {
-    // send game invite and set haiku to random number
-    snprintf(ourText, sizeof(ourText), "%d", random(10000));
-    ourText[31] = '\0';
+  bool isRetryTimeExceeded = now - lastInteraction > DRAW_RETRY_TIME_MS;
+  bool isPlayTimeExceeded = now - lastInteraction > PLAY_EVERY_MS;
+  bool isGhostTimeExceeded = now - lastInteraction > GAME_GHOST_TTL;
+  bool isGameDrawOrAbandoned = (status == GAME_DRAW || status == GAME_ABANDONED);
+  bool isGameWonOrLost = (status == GAME_WON || status == GAME_LOST);
 
-    sendGameAccept(nodeNum, ourText);
-    setStatus(GAME_ACCEPTED);
-
-    return 1;
-  } else if (status == GAME_ACCEPTED || status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US) {
-    NodeNum localNodeNum = nodeDB->getNodeNum();
-
-    char haikuText[128];
-
-    if(localNodeNum < nodeNum) {
-      snprintf(haikuText, sizeof(haikuText), "%s/%s/%0x", ourText, theirText, localNodeNum);
-    } else {
-      snprintf(haikuText, sizeof(haikuText), "%s/%s/%0x", theirText, ourText, localNodeNum);
-    }
-
-    ourSignature = crypto->performHashcash(haikuText, NUM_ZEROES, lastSignatureCounter, HASH_TURN_SIZE);
-    if(ourSignature == 0 && lastSignatureCounter <= MAX_HASHCASH) {
-      // we couldn't find a hash in HASH_TURN_SIZE iterations, we'll try again next time
-      lastSignatureCounter += HASH_TURN_SIZE;
-      //naraModule->setLog("still thinking turn...");
-      lastInteraction = now;
-      return 100;
-    }
-
-    sendGameMove(nodeNum, haikuText, ourSignature);
-
-    if(status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US) {
-      setStatus(GAME_CHECKING_WHO_WON);
-      checkWhoWon();
-      resetGame();
-    }else{
-      setStatus(GAME_WAITING_FOR_OPPONENT_TURN);
-    }
-
-    return 1;
-  }else if((status == GAME_DRAW && now - lastInteraction > DRAW_RETRY_TIME_MS) || (status == GAME_ABANDONED && now - lastInteraction > DRAW_RETRY_TIME_MS)) {
+  if ((isGameDrawOrAbandoned && isRetryTimeExceeded) || (isGameWonOrLost && isPlayTimeExceeded)) {
     setStatus(UNCONTACTED);
     naraModule->setLog("will play again w/" + String(nodeNum, HEX));
     return random(5 * 1000, 20 * 1000);
-  } else if(isGameInProgress() && now - lastInteraction > GAME_GHOST_TTL) {
+  } else if(isGameInProgress() && isGhostTimeExceeded) {
     setStatus(GAME_ABANDONED);
     naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");
     return 1;
-  } else if((status == GAME_WON || status == GAME_LOST) && now - lastInteraction > PLAY_EVERY_MS) {
-    setStatus(UNCONTACTED);
-    naraModule->setLog("will play again w/" + String(nodeNum, HEX));
-    return random(5 * 1000, 20 * 1000);
   }
 
   return 0;
 }
 
-void NaraEntry::checkWhoWon() {
-  LOG_DEBUG("NARA checking signatures against 0x%0x, our_signature=%d, their_signature=%d\n", nodeNum, ourSignature, theirSignature);
-  if(ourSignature == theirSignature) {
-    setStatus(GAME_DRAW);
-  } else if(ourSignature <= 0) {
-    setStatus(GAME_LOST);
-  } else if(theirSignature == 0) {
-    setStatus(GAME_WON);
-  } else if(ourSignature < theirSignature) {
-    setStatus(GAME_WON);
-  } else {
-    setStatus(GAME_LOST);
+int NaraEntry::startGame() {
+  if(naraModule->gamesInProgress() > 0) { // only play one game at a time
+    return 0;
   }
+
+  snprintf(ourText, sizeof(ourText), "%d", random(10000));
+  ourText[31] = '\0';
+
+  if(status == UNCONTACTED) {
+    sendGameInvite(nodeNum, ourText);
+    setStatus(GAME_INVITE_SENT);
+  } else {
+    sendGameAccept(nodeNum, ourText);
+    setStatus(GAME_ACCEPTED);
+  }
+
+  return 1;
 }
+
+int NaraEntry::playGameTurn() {
+  NodeNum localNodeNum = nodeDB->getNodeNum();
+
+  char haikuText[128];
+
+  if(localNodeNum < nodeNum) {
+    snprintf(haikuText, sizeof(haikuText), "%s/%s/%0x", ourText, theirText, localNodeNum);
+  } else {
+    snprintf(haikuText, sizeof(haikuText), "%s/%s/%0x", theirText, ourText, localNodeNum);
+  }
+
+  ourSignature = crypto->performHashcash(haikuText, NUM_ZEROES, lastSignatureCounter, HASH_TURN_SIZE);
+  // if we couldn't find a hash in HASH_TURN_SIZE iterations, we'll try again next time
+  if(ourSignature == 0 && lastSignatureCounter <= MAX_HASHCASH) {
+    lastSignatureCounter += HASH_TURN_SIZE;
+    lastInteraction = millis();
+    return 100; // yield thread for 100ms
+  }
+
+  sendGameMove(nodeNum, haikuText, ourSignature);
+
+  if(status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US) {
+    setStatus(GAME_CHECKING_WHO_WON);
+    checkWhoWon();
+    resetGame();
+  }else{
+    setStatus(GAME_WAITING_FOR_OPPONENT_TURN);
+  }
+
+  return 1;
+}
+
+void NaraEntry::abandonWeirdGame() {
+  setStatus(GAME_ABANDONED);
+  resetGame();
+  naraModule->setLog(String("uh-oh! ") + String(nodeNum, HEX));
+}
+
+bool NaraEntry::sendGameInvite(NodeNum dest, char* haikuText) {
+  return naraModule->sendHaiku(dest, haikuText, meshtastic_NaraMessage_MessageType_GAME_INVITE, 0);
+}
+
+bool NaraEntry::sendGameAccept(NodeNum dest, char* haikuText) {
+  return naraModule->sendHaiku(dest, haikuText, meshtastic_NaraMessage_MessageType_GAME_ACCEPT, 0);
+}
+
+bool NaraEntry::sendGameMove(NodeNum dest, char* haikuText, int signature) {
+  return naraModule->sendHaiku(dest, haikuText, meshtastic_NaraMessage_MessageType_GAME_TURN, signature);
+}
+
+String NaraEntry::nodeName() {
+  String otherNodeName = nodeDB->getMeshNode(nodeNum)->user.short_name;
+  if(otherNodeName == "") {
+    otherNodeName = String(nodeNum, HEX);
+  }
+  return otherNodeName;
+}
+

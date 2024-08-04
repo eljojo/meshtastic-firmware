@@ -22,6 +22,7 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
     void setLog(String log);
     bool handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *r) override;
     bool sendHaiku(NodeNum dest, char* haikuText, _meshtastic_NaraMessage_MessageType messageType, int signature);
+    int gamesInProgress();
 
     String getNaraMessage(int16_t y);
     String getShortMessage();

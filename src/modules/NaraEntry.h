@@ -44,7 +44,7 @@ class NaraEntry {
 
     void handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm);
 
-    void checkWhoWon();
+
     int processNextStep();
     String nodeName();
 
@@ -54,7 +54,8 @@ class NaraEntry {
 
     int getPoints() {
       int invitePoints = inviteSent ? 1 : 0;
-      return winCount * 3 + drawCount * 5 + loseCount + invitePoints;
+      if(winCount + loseCount + drawCount == 0) return invitePoints;
+      return winCount * 3 + drawCount * 5 + loseCount;
     }
 
     void resetGame() {
@@ -66,6 +67,12 @@ class NaraEntry {
       theirSignature = 0;
       lastSignatureCounter = 0;
     }
+
+    int startGame();
+    int playGameTurn();
+    void acceptGame(meshtastic_NaraMessage* nm);
+    void processOtherTurn(meshtastic_NaraMessage* nm);
+    void abandonWeirdGame();
 
     bool isGameInProgress() {
       return status == GAME_ACCEPTED || status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US || status == GAME_WAITING_FOR_OPPONENT_TURN || status == GAME_CHECKING_WHO_WON;
@@ -97,6 +104,21 @@ class NaraEntry {
           return "GAME_ABANDONED";
         default:
           return "UNKNOWN";
+      }
+    }
+
+    void checkWhoWon() {
+      LOG_DEBUG("NARA checking signatures against 0x%0x, our_signature=%d, their_signature=%d\n", nodeNum, ourSignature, theirSignature);
+      if(ourSignature == theirSignature) {
+        setStatus(GAME_DRAW);
+      } else if(ourSignature <= 0) {
+        setStatus(GAME_LOST);
+      } else if(theirSignature == 0) {
+        setStatus(GAME_WON);
+      } else if(ourSignature < theirSignature) {
+        setStatus(GAME_WON);
+      } else {
+        setStatus(GAME_LOST);
       }
     }
 
