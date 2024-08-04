@@ -9,6 +9,7 @@
 #define GAME_GHOST_TTL 60000           // assume ghosted after 60 seconds
 #define DRAW_RETRY_TIME_MS 5000            // retry in 5 seconds in case of draw
 #define PLAY_EVERY_MS 2 * 60 * 1000        // play new game every 2 minutes
+#define REINVITE_AFTER 10 * 60 * 1000      // reinvite after 10 minutes
 
 bool NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm) {
   if(nm->type == meshtastic_NaraMessage_MessageType_GAME_INVITE || nm->type == meshtastic_NaraMessage_MessageType_GAME_ACCEPT) {
@@ -162,9 +163,6 @@ int NaraEntry::processNextStep() {
 
 int NaraEntry::checkDeadlines() {
   uint32_t now = millis();
-  bool isRetryTimeExceeded = now - lastInteraction > DRAW_RETRY_TIME_MS;
-  bool isPlayTimeExceeded = now - lastInteraction > PLAY_EVERY_MS;
-  bool isGhostTimeExceeded = now - lastInteraction > GAME_GHOST_TTL;
   bool isGameDrawOrAbandoned = (status == GAME_DRAW || status == GAME_ABANDONED);
   bool isGameWonOrLost = (status == GAME_WON || status == GAME_LOST);
 
@@ -173,7 +171,7 @@ int NaraEntry::checkDeadlines() {
     LOG_DEBUG("node %0x is in status %s\n", nodeNum, getStatusString().c_str());
   }
 
-  if ((isGameDrawOrAbandoned && isRetryTimeExceeded) || (isGameWonOrLost && isPlayTimeExceeded)) {
+  if ((isGameDrawOrAbandoned && now - lastInteraction > DRAW_RETRY_TIME_MS) || (isGameWonOrLost && now - lastInteraction > PLAY_EVERY_MS)) {
     if(lowPowerMode()) {
       // LOG_DEBUG("NARA skipping retry game with %0x for now, we are in low power mode\n", nodeNum);
       return 0;
@@ -181,9 +179,13 @@ int NaraEntry::checkDeadlines() {
     setStatus(UNCONTACTED);
     setLog("will challenge soon!");
     return random(5 * 1000, 20 * 1000);
-  } else if(isGameInProgress() && isGhostTimeExceeded) {
+  } else if(isGameInProgress() && now - lastInteraction > GAME_GHOST_TTL) {
     setStatus(GAME_ABANDONED);
     return 1;
+  } else if(status == GAME_INVITE_SENT && now - lastInteraction > REINVITE_AFTER) {
+    LOG_INFO("NARA node %0x is in status %s for too long, abandoning\n", nodeNum, getStatusString().c_str());
+    setStatus(UNCONTACTED);
+    return 0;
   }
 
   return 0;
