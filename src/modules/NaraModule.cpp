@@ -119,6 +119,7 @@ int32_t NaraModule::runOnce()
 // used for debugging
 const NodeNum NARA2 = 0x336a3370;
 const NodeNum NARA6 = 0x4359109c;
+const NodeNum NARA_PAPER = 0x43561180;
 
 void NaraModule::updateNodeCount()
 {
@@ -132,7 +133,9 @@ void NaraModule::updateNodeCount()
     if (strcmp(node->user.long_name, "") == 0) continue;
 
     // only enable for these debug nodes
-    if (node->num != NARA2 && node->num != NARA6) continue;
+    if (node->num != NARA2 && node->num != NARA6 && node->num != NARA_PAPER) {
+      continue;
+    }
 
     //if (node->num != localNodeNum && sinceLastSeen(node) < NUM_ONLINE_SECS && !node->via_mqtt) {
     if (node->num != localNodeNum && !node->via_mqtt) {
