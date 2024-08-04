@@ -93,16 +93,24 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       break;
     case GAME_ACCEPTED:
       if(nodeDB->getNodeNum() < nodeNum) {
-        setLog(String("thinking turn...    ") + String(ourText) + "/" + String(theirText));
+        setLog(String("rolled dice       ") + String(ourText) + " / " + String(theirText));
       } else {
-        setLog(String("thinking turn...    ") + String(theirText) + "/" + String(ourText));
+        setLog(String("rolled dice       ") + String(theirText) + " / " + String(ourText));
       }
       break;
     case GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US:
       setLog(nodeName() + " is waiting for us");
       break;
     case GAME_WAITING_FOR_OPPONENT_TURN:
-      setLog("waiting for opponent");
+      if(ourSignature == 0) {
+        setLog("couldn't find magic number");
+      } else {
+        if(nodeDB->getNodeNum() < nodeNum) {
+          setLog("waiting for nara, " + String(ourSignature) + "/?");
+        } else {
+          setLog("waiting for nara, ?/" + String(ourSignature));
+        }
+      }
       break;
     case GAME_CHECKING_WHO_WON:
       setLog("checking who won...");
@@ -219,6 +227,7 @@ int NaraEntry::startGame() {
 int NaraEntry::playGameTurn() {
   NodeNum localNodeNum = nodeDB->getNodeNum();
 
+  const int SUSPENSE_FACTOR = 20000; // even if we know we're gonna lose, keep trying finding a hash for a lil longer before giving up
   char haikuText[128];
 
   if(localNodeNum < nodeNum) {
@@ -227,11 +236,22 @@ int NaraEntry::playGameTurn() {
     snprintf(haikuText, sizeof(haikuText), "%s/%s/%0x", theirText, ourText, localNodeNum);
   }
 
+  // if the other oponent already found a hash, and it's better than ours, there's no point in keeping playing
+  if(status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US && lastSignatureCounter > 0 && theirSignature != 0 && (theirSignature + SUSPENSE_FACTOR) < lastSignatureCounter) {
+    LOG_INFO("NARA node %0x is in status %s, but the other node already found a better hash. Abandoning\n", nodeNum, getStatusString().c_str());
+    setStatus(GAME_CHECKING_WHO_WON);
+    checkWhoWon();
+    resetGame();
+    return 1;
+  }
+
   ourSignature = crypto->performHashcash(haikuText, NUM_ZEROES, lastSignatureCounter, HASH_TURN_SIZE);
   // if we couldn't find a hash in HASH_TURN_SIZE iterations, we'll try again next time
   if(ourSignature == 0 && lastSignatureCounter <= MAX_HASHCASH) {
     lastSignatureCounter += HASH_TURN_SIZE;
     lastInteraction = millis();
+
+    screenLog = String("finding number...    ") + String(lastSignatureCounter - random(HASH_TURN_SIZE));
     return 100; // yield thread for 100ms
   }
 
