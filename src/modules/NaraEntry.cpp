@@ -244,15 +244,13 @@ int NaraEntry::playGameTurn() {
   // if the other oponent already found a hash, and it's better than ours, there's no point in keeping playing
   if(status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US && lastSignatureCounter > 0 && theirSignature != 0 && (theirSignature + SUSPENSE_FACTOR) < lastSignatureCounter) {
     LOG_INFO("NARA node %0x is in status %s, but the other node already found a better hash. Abandoning\n", nodeNum, getStatusString().c_str());
-    setStatus(GAME_CHECKING_WHO_WON);
-    checkWhoWon();
-    resetGame();
-    return 1;
+    lastSignatureCounter = MAX_HASHCASH;
+  }else{
+    ourSignature = crypto->performHashcash(haikuText, NUM_ZEROES, lastSignatureCounter, HASH_TURN_SIZE);
   }
 
-  ourSignature = crypto->performHashcash(haikuText, NUM_ZEROES, lastSignatureCounter, HASH_TURN_SIZE);
   // if we couldn't find a hash in HASH_TURN_SIZE iterations, we'll try again next time
-  if(ourSignature == 0 && lastSignatureCounter <= MAX_HASHCASH) {
+  if(ourSignature == 0 && lastSignatureCounter < MAX_HASHCASH) {
     lastSignatureCounter += HASH_TURN_SIZE;
     lastInteraction = millis();
 
