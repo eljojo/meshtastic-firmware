@@ -78,17 +78,17 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       break;
     case GAME_INVITE_SENT:
       if(nodeDB->getNodeNum() < nodeNum) {
-        setLog("sent challenge " + String(ourText) + "/?");
+        setLog("sent challenge " + String(ourText) + " / ?");
       } else {
-        setLog("sent challenge ?/" + String(ourText));
+        setLog("sent challenge ? / " + String(ourText));
       }
       inviteSent = true;
       break;
     case GAME_INVITE_RECEIVED:
       if(nodeDB->getNodeNum() < nodeNum) {
-        setLog("CHALLENGED!   ?/" + String(theirText));
+        setLog("CHALLENGED!   ? / " + String(theirText));
       } else {
-        setLog("CHALLENGED!   " + String(theirText) + "/?");
+        setLog("CHALLENGED!   " + String(theirText) + " / ?");
       }
       break;
     case GAME_ACCEPTED:
@@ -148,6 +148,10 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
 }
 
 int NaraEntry::processNextStep() {
+  if(cooldownUntil > 0 && millis() < cooldownUntil) {
+    return 0;
+  }
+
   if (status == COOLDOWN) {
     if(millis() - lastInteraction > 60000) setStatus(UNCONTACTED);
     return 0;
@@ -186,7 +190,8 @@ int NaraEntry::checkDeadlines() {
     }
     setStatus(UNCONTACTED);
     setLog("will challenge soon!");
-    return random(5 * 1000, 20 * 1000);
+    addCooldownPeriod();
+    return 1;
   } else if(isGameInProgress() && now - lastInteraction > GAME_GHOST_TTL) {
     setStatus(GAME_ABANDONED);
     return 1;
@@ -251,7 +256,7 @@ int NaraEntry::playGameTurn() {
     lastSignatureCounter += HASH_TURN_SIZE;
     lastInteraction = millis();
 
-    screenLog = String("finding number...    ") + String(lastSignatureCounter - random(HASH_TURN_SIZE));
+    screenLog = String("finding number...    ") + String(lastSignatureCounter - 1);
     return 100; // yield thread for 100ms
   }
 

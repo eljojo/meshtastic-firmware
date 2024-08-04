@@ -22,6 +22,7 @@ enum NaraEntryStatus {
 class NaraEntry {
   public:
     uint32_t lastInteraction;
+    uint32_t cooldownUntil = 0;
     NodeNum nodeNum;
     NaraEntryStatus status;
     char ourText[32];
@@ -139,6 +140,10 @@ class NaraEntry {
     void abandonWeirdGame() {
       setStatus(COOLDOWN);
       resetGame();
+    }
+
+    void addCooldownPeriod() {
+      cooldownUntil = millis() + random(5 * 1000, 20 * 1000);
     }
 
   protected:
