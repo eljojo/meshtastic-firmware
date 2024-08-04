@@ -229,7 +229,7 @@ String NaraModule::getClosestNodeNames(int maxNodes)
     });
 
     // Generate the string with the closest node names
-    String nodeNames = "-> ";
+    String nodeNames = "> ";
     int count = 0;
     int currentLineLength = 0;
 

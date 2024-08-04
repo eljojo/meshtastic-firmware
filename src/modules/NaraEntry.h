@@ -80,7 +80,7 @@ class NaraEntry {
     }
 
     bool gameJustEnded() {
-      return status == GAME_WON || status == GAME_LOST || status == GAME_DRAW;
+      return (status == GAME_WON || status == GAME_LOST || status == GAME_DRAW) && millis() - lastInteraction < 30000;
     }
 
     String getLog() {

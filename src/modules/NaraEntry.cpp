@@ -79,16 +79,16 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       break;
     case GAME_INVITE_RECEIVED:
       if(nodeDB->getNodeNum() < nodeNum) {
-        setLog("CHALLENGED! ?/" + String(theirText));
+        setLog("CHALLENGED!   ?/" + String(theirText));
       } else {
-        setLog("CHALLENGED! " + String(theirText) + "/?");
+        setLog("CHALLENGED!   " + String(theirText) + "/?");
       }
       break;
     case GAME_ACCEPTED:
       if(nodeDB->getNodeNum() < nodeNum) {
-        setLog(String("thinking turn... ") + String(ourText) + "/" + String(theirText));
+        setLog(String("thinking turn...    ") + String(ourText) + "/" + String(theirText));
       } else {
-        setLog(String("thinking turn... ") + String(theirText) + "/" + String(ourText));
+        setLog(String("thinking turn...    ") + String(theirText) + "/" + String(ourText));
       }
       break;
     case GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US:
@@ -101,11 +101,19 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       setLog("checking who won...");
       break;
     case GAME_WON:
-      setLog("WON! " + String(ourSignature) + " vs " + String(theirSignature));
+      if(theirSignature == 0) {
+        setLog("they conceded, we win!");
+      } else {
+        setLog("WON!      " + String(ourSignature) + " vs " + String(theirSignature));
+      }
       winCount++;
       break;
     case GAME_LOST:
-      setLog("lost game: " + String(ourSignature) + " vs " + String(theirSignature));
+      if(ourSignature == 0) {
+        setLog("conceding, " + nodeName() + " wins");
+      } else {
+        setLog("LOST!    " + String(ourSignature) + " vs " + String(theirSignature));
+      }
       loseCount++;
       break;
     case GAME_DRAW:
@@ -147,7 +155,7 @@ int NaraEntry::checkDeadlines() {
 
   if ((isGameDrawOrAbandoned && isRetryTimeExceeded) || (isGameWonOrLost && isPlayTimeExceeded)) {
     setStatus(UNCONTACTED);
-    setLog("will play again w/" + String(nodeNum, HEX));
+    setLog("will challenge soon!");
     return random(5 * 1000, 20 * 1000);
   } else if(isGameInProgress() && isGhostTimeExceeded) {
     setStatus(GAME_ABANDONED);
@@ -164,7 +172,7 @@ int NaraEntry::startGame() {
     return 0;
   }
 
-  snprintf(ourText, sizeof(ourText), "%d", random(10000));
+  snprintf(ourText, sizeof(ourText), "%d", random(100, 999));
   ourText[31] = '\0';
 
   if(status == UNCONTACTED) {
