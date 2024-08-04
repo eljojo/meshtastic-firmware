@@ -133,6 +133,11 @@ int NaraEntry::processNextStep() {
     return startGame();
   }
 
+  if(status == GAME_INVITE_SENT && millis() - lastInteraction > 10000) {
+    // we sent a game invite, but haven't heard back yet
+    return 1; // consider "an action done", so we don't move to the next NaraEntry
+  }
+
   if (status == GAME_ACCEPTED || status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US) {
     return playGameTurn();
   }
