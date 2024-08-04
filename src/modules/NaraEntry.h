@@ -54,8 +54,7 @@ class NaraEntry {
 
     int getPoints() {
       int invitePoints = inviteSent ? 1 : 0;
-      if(winCount + loseCount + drawCount == 0) return invitePoints;
-      return winCount * 3 + drawCount * 5 + loseCount;
+      return winCount * 3 + drawCount * 5 + loseCount + invitePoints;
     }
 
     void resetGame() {
