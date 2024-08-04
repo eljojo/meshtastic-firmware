@@ -7,6 +7,7 @@
 #define MAX_HASHCASH 100000             // give up game after these many iterations
 #define GAME_GHOST_TTL 60000           // assume ghosted after 60 seconds
 #define DRAW_RETRY_TIME_MS 5000            // retry in 5 seconds in case of draw
+#define PLAY_EVERY_MS 2 * 60 * 1000        // play new game every 2 minutes
 
 bool NaraEntry::sendGameInvite(NodeNum dest, char* haikuText) {
   return naraModule->sendHaiku(dest, haikuText, meshtastic_NaraMessage_MessageType_GAME_INVITE, 0);
@@ -182,6 +183,10 @@ int NaraEntry::processNextStep() {
     setStatus(GAME_ABANDONED);
     naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");
     return 1;
+  } else if((status == GAME_WON || status == GAME_LOST) && now - lastInteraction > PLAY_EVERY_MS) {
+    setStatus(UNCONTACTED);
+    naraModule->setLog("will play again w/" + String(nodeNum, HEX));
+    return random(5 * 1000, 20 * 1000);
   }
 
   return 0;
