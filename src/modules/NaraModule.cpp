@@ -40,7 +40,12 @@ bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtas
   }
 
   NaraEntry &entry = naraDatabase[mp.from];
-  entry.handleMeshPacket(mp, nm);
+  bool didAction = entry.handleMeshPacket(mp, nm);
+
+  if(didAction) {
+    screenTitle = "Battle " + entry.nodeName();
+    screenLog = entry.getLog();
+  }
 
   return true;
 }
@@ -48,21 +53,35 @@ bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtas
 void NaraModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y)
 {
   display->setTextAlignment(TEXT_ALIGN_LEFT);
+
+  int points = 0;
+  int naraSeen = 0;
+  String title = "";
+
+  for (auto& entry : naraDatabase) {
+    auto& naraEntry = entry.second;
+    points += naraEntry.getPoints();
+    if (naraEntry.getPoints() > 1) naraSeen++;
+  }
+
+  String statusMessage = String(naraSeen) + " nara seen | " + String(points) + " points";
+
+  if(screenTitle.length() > 0) {
+    display->setFont(FONT_MEDIUM);
+    display->drawString(x, y, screenTitle);
+    y += _fontHeight(FONT_MEDIUM);
+  }
+
   display->setFont(FONT_SMALL);
-  // display->drawString(x, y, owner.long_name);
   display->drawString(x, y, screenLog);
+
   y += _fontHeight(FONT_SMALL);
   display->setFont(FONT_SMALL);
-  display->drawString(x, y, getNaraMessage(y));
+  display->drawString(x, y, statusMessage);
 
-  int splitIndex = closestNodes.indexOf('\n');
-
-  y += _fontHeight(FONT_SMALL);
-  if (splitIndex != -1) {
-    display->drawString(x, y, closestNodes.substring(0, splitIndex));
+  if(screenTitle.length() == 0) {
     y += _fontHeight(FONT_SMALL);
-    display->drawString(x, y, closestNodes.substring(splitIndex + 1));
-  } else {
+    y += _fontHeight(FONT_SMALL);
     display->drawString(x, y, closestNodes);
   }
 
@@ -82,12 +101,29 @@ bool NaraModule::wantUIFrame()
 
 int NaraModule::messageNextNode()
 {
+  bool idle = true;
+
   for (auto& entry : naraDatabase) {
-    int entryResult = entry.second.processNextStep();
+    auto& naraEntry = entry.second;
+    int entryResult = naraEntry.processNextStep();
+
+    if(naraEntry.isGameInProgress() || naraEntry.gameJustEnded()) {
+      idle = false;
+    }
+
     if(entryResult > 0) {
+      screenTitle = "Battle " + naraEntry.nodeName();
+      screenLog = naraEntry.getLog();
+      idle = false;
       return entryResult;
     }
   }
+
+  if(idle) {
+    screenTitle = "";
+    screenLog = String(owner.long_name) + " is chillin'";
+  }
+
   return 0;
 }
 
@@ -193,7 +229,7 @@ String NaraModule::getClosestNodeNames(int maxNodes)
     });
 
     // Generate the string with the closest node names
-    String nodeNames = "w/ ";
+    String nodeNames = "-> ";
     int count = 0;
     int currentLineLength = 0;
 
@@ -206,10 +242,7 @@ String NaraModule::getClosestNodeNames(int maxNodes)
 
         String nodeName = node->user.short_name;
 
-        if (currentLineLength + nodeName.length() + 2 > MAX_LINE_LENGTH) {  // +2 for ", "
-            nodeNames += "\n";
-            currentLineLength = 0;
-        }
+        if (currentLineLength + nodeName.length() + 2 > MAX_LINE_LENGTH) break;
 
         if (currentLineLength > 0) {
             nodeNames += ", ";
@@ -221,9 +254,7 @@ String NaraModule::getClosestNodeNames(int maxNodes)
         count++;
     }
 
-    if (nodeNames == "w/ ") {
-        nodeNames = "No nodes";
-    }
+    if (count == 0) return "";
 
     return nodeNames;
 }
@@ -249,29 +280,6 @@ String NaraModule::getShortMessage()
     return ":D";
   } else {
     return "xD";
-  }
-}
-
-String NaraModule::getLongMessage()
-{
-  int points = 0;
-  int naraSeen = 0;
-  for (auto& entry : naraDatabase) {
-    points += entry.second.getPoints();
-    if (entry.second.getPoints() > 1) {
-      naraSeen++;
-    }
-  }
-
-  return String(naraSeen) + " nara seen | " + String(points) + " points";
-}
-
-String NaraModule::getNaraMessage(int16_t y)
-{
-  if (y < FONT_HEIGHT_SMALL) {
-    return getShortMessage();
-  } else {
-    return getLongMessage();
   }
 }
 

@@ -24,7 +24,6 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
     bool sendHaiku(NodeNum dest, char* haikuText, _meshtastic_NaraMessage_MessageType messageType, int signature);
     int gamesInProgress();
 
-    String getNaraMessage(int16_t y);
     String getShortMessage();
     String getClosestNodeNames(int maxNodes);
 
@@ -40,7 +39,8 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
     String getLongMessage();
 
     String hashMessage;
-    String screenLog;
+    String screenLog = "";
+    String screenTitle = "";
     String closestNodes;
 
     std::map<NodeNum, NaraEntry> naraDatabase;

@@ -9,17 +9,21 @@
 #define DRAW_RETRY_TIME_MS 5000            // retry in 5 seconds in case of draw
 #define PLAY_EVERY_MS 2 * 60 * 1000        // play new game every 2 minutes
 
-void NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm) {
+bool NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm) {
   if(nm->type == meshtastic_NaraMessage_MessageType_GAME_INVITE || nm->type == meshtastic_NaraMessage_MessageType_GAME_ACCEPT) {
     acceptGame(nm);
+    return true;
   } else if(nm->type == meshtastic_NaraMessage_MessageType_GAME_TURN) {
     processOtherTurn(nm);
+    return true;
   } else {
     LOG_WARN("NARA Received unexpected message from 0x%0x, type=%d. We're in status=%s\n", nodeNum, nm->type, getStatusString().c_str());
     if(isGameInProgress()) {
       abandonWeirdGame();
+      return true;
     }
   }
+  return false;
 }
 
 void NaraEntry::acceptGame(meshtastic_NaraMessage* nm) {
@@ -48,10 +52,11 @@ void NaraEntry::processOtherTurn(meshtastic_NaraMessage* nm) {
     } else if(status == GAME_ACCEPTED) {
       LOG_INFO("NARA Received game turn from 0x%0x before we sent ours. Will switch on next iteration.\n", nodeNum);
       setStatus(GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US);
-    // } else if(status == GAME_INVITE_SENT) {
-    // looks like we missed the packet when the game was accepted, we can still try decoding the other nara's move and continue playing
     } else {
       LOG_WARN("NARA Received game turn from 0x%0x, but we're not waiting for it. We're in status=%s\n", nodeNum, getStatusString().c_str());
+      if(status == GAME_INVITE_SENT) {
+        // looks like we missed the packet when the game was accepted, we could still try decoding the other nara's move and continue playing
+      }
       abandonWeirdGame();
     }
 }
@@ -62,45 +67,53 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
 
   switch(status) {
     case UNCONTACTED:
-      // naraModule->setLog("uncontacted");
+      // setLog("uncontacted");
       break;
     case GAME_INVITE_SENT:
-      naraModule->setLog("invited " + nodeName());
+      if(nodeDB->getNodeNum() < nodeNum) {
+        setLog("sent challenge " + String(ourText) + "/?");
+      } else {
+        setLog("sent challenge ?/" + String(ourText));
+      }
       inviteSent = true;
       break;
     case GAME_INVITE_RECEIVED:
-      naraModule->setLog(nodeName() + " wants to play");
+      if(nodeDB->getNodeNum() < nodeNum) {
+        setLog("CHALLENGED! ?/" + String(theirText));
+      } else {
+        setLog("CHALLENGED! " + String(theirText) + "/?");
+      }
       break;
     case GAME_ACCEPTED:
       if(nodeDB->getNodeNum() < nodeNum) {
-        naraModule->setLog(String("thinking turn... ") + String(ourText) + "/" + String(theirText));
+        setLog(String("thinking turn... ") + String(ourText) + "/" + String(theirText));
       } else {
-        naraModule->setLog(String("thinking turn... ") + String(theirText) + "/" + String(ourText));
+        setLog(String("thinking turn... ") + String(theirText) + "/" + String(ourText));
       }
       break;
     case GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US:
-      naraModule->setLog(nodeName() + " is waiting for us");
+      setLog(nodeName() + " is waiting for us");
       break;
     case GAME_WAITING_FOR_OPPONENT_TURN:
-      naraModule->setLog("waiting for " + nodeName());
+      setLog("waiting for opponent");
       break;
     case GAME_CHECKING_WHO_WON:
-      naraModule->setLog("checking who won...");
+      setLog("checking who won...");
       break;
     case GAME_WON:
-      naraModule->setLog("WON! " + String(ourSignature) + " vs " + String(theirSignature));
+      setLog("WON! " + String(ourSignature) + " vs " + String(theirSignature));
       winCount++;
       break;
     case GAME_LOST:
-      naraModule->setLog("lost game: " + String(ourSignature) + " vs " + String(theirSignature));
+      setLog("lost game: " + String(ourSignature) + " vs " + String(theirSignature));
       loseCount++;
       break;
     case GAME_DRAW:
-      naraModule->setLog("DRAW game w/" + nodeName());
+      setLog("DRAW game");
       drawCount++;
       break;
     case GAME_ABANDONED:
-      //naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");
+      //setLog(String(nodeNum, HEX) + " GHOSTED us");
       break;
   }
 
@@ -108,13 +121,6 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
 }
 
 int NaraEntry::processNextStep() {
-  uint32_t now = millis();
-
-  // don't spam logs
-  if(now - lastInteraction <= GAME_GHOST_TTL) {
-    LOG_DEBUG("node %0x is in status %s\n", nodeNum, getStatusString().c_str());
-  }
-
   if (status == UNCONTACTED || status == GAME_INVITE_RECEIVED) {
     return startGame();
   }
@@ -123,19 +129,29 @@ int NaraEntry::processNextStep() {
     return playGameTurn();
   }
 
+  return checkDeadlines();
+}
+
+int NaraEntry::checkDeadlines() {
+  uint32_t now = millis();
   bool isRetryTimeExceeded = now - lastInteraction > DRAW_RETRY_TIME_MS;
   bool isPlayTimeExceeded = now - lastInteraction > PLAY_EVERY_MS;
   bool isGhostTimeExceeded = now - lastInteraction > GAME_GHOST_TTL;
   bool isGameDrawOrAbandoned = (status == GAME_DRAW || status == GAME_ABANDONED);
   bool isGameWonOrLost = (status == GAME_WON || status == GAME_LOST);
 
+  // don't spam logs
+  if(now - lastInteraction <= GAME_GHOST_TTL) {
+    LOG_DEBUG("node %0x is in status %s\n", nodeNum, getStatusString().c_str());
+  }
+
   if ((isGameDrawOrAbandoned && isRetryTimeExceeded) || (isGameWonOrLost && isPlayTimeExceeded)) {
     setStatus(UNCONTACTED);
-    naraModule->setLog("will play again w/" + String(nodeNum, HEX));
+    setLog("will play again w/" + String(nodeNum, HEX));
     return random(5 * 1000, 20 * 1000);
   } else if(isGameInProgress() && isGhostTimeExceeded) {
     setStatus(GAME_ABANDONED);
-    naraModule->setLog(String(nodeNum, HEX) + " GHOSTED us");
+    setLog(nodeName() + " GHOSTED us");
     return 1;
   }
 
@@ -144,6 +160,7 @@ int NaraEntry::processNextStep() {
 
 int NaraEntry::startGame() {
   if(naraModule->gamesInProgress() > 0) { // only play one game at a time
+    LOG_DEBUG("NARA skipping game with %0x for now, we are already playing another game\n", nodeNum);
     return 0;
   }
 
@@ -193,10 +210,11 @@ int NaraEntry::playGameTurn() {
   return 1;
 }
 
-void NaraEntry::abandonWeirdGame() {
-  setStatus(GAME_ABANDONED);
-  resetGame();
-  naraModule->setLog(String("uh-oh! ") + String(nodeNum, HEX));
+void NaraEntry::setLog(String log)
+{
+  LOG_INFO("%s\n", log.c_str());
+  screenLog = log;
+  //naraModule->setLog(log);
 }
 
 bool NaraEntry::sendGameInvite(NodeNum dest, char* haikuText) {

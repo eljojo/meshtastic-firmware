@@ -39,11 +39,11 @@ class NaraEntry {
       this->nodeNum = nodeNum;
       this->status = status;
       this->lastInteraction = millis(); // or use time(nullptr) for actual time
+      screenLog = "";
       resetGame();
     }
 
-    void handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm);
-
+    bool handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm);
 
     int processNextStep();
     String nodeName();
@@ -59,6 +59,7 @@ class NaraEntry {
     }
 
     void resetGame() {
+      LOG_DEBUG("NARA resetGame for node %0x\n", nodeNum);
       // set theirText and ourText to empty strings
       memset(theirText, 0, sizeof(theirText));
       memset(ourText, 0, sizeof(ourText));
@@ -70,12 +71,21 @@ class NaraEntry {
 
     int startGame();
     int playGameTurn();
+    int checkDeadlines();
     void acceptGame(meshtastic_NaraMessage* nm);
     void processOtherTurn(meshtastic_NaraMessage* nm);
-    void abandonWeirdGame();
+    void setLog(String log);
 
     bool isGameInProgress() {
       return status == GAME_ACCEPTED || status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US || status == GAME_WAITING_FOR_OPPONENT_TURN || status == GAME_CHECKING_WHO_WON;
+    }
+
+    bool gameJustEnded() {
+      return status == GAME_WON || status == GAME_LOST || status == GAME_DRAW;
+    }
+
+    String getLog() {
+      return screenLog;
     }
 
     String getStatusString() {
@@ -122,6 +132,13 @@ class NaraEntry {
       }
     }
 
+    void abandonWeirdGame() {
+      setStatus(GAME_ABANDONED);
+      resetGame();
+      setLog(String("uh-oh! ") + String(nodeNum, HEX));
+    }
+
   protected:
     void setStatus(NaraEntryStatus status);
+    String screenLog;
 };
