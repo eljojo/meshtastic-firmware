@@ -47,6 +47,8 @@ void NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_Nar
     } else if(status == GAME_ACCEPTED) {
       LOG_INFO("NARA Received game turn from 0x%0x before we sent ours. Will switch on next iteration.\n", nodeNum);
       setStatus(GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US);
+    // } else if(status == GAME_INVITE_SENT) {
+    // looks like we missed the packet when the game was accepted, we can still try decoding the other nara's move and continue playing
     } else {
       LOG_WARN("NARA Received game turn from 0x%0x, but we're not waiting for it. We're in status=%s\n", nodeNum, getStatusString().c_str());
       setStatus(GAME_ABANDONED);
