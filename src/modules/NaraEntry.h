@@ -15,7 +15,8 @@ enum NaraEntryStatus {
   GAME_WON,
   GAME_LOST,
   GAME_DRAW,
-  GAME_ABANDONED
+  GAME_ABANDONED,
+  COOLDOWN
 };
 
 class NaraEntry {
@@ -113,6 +114,8 @@ class NaraEntry {
           return "GAME_DRAW";
         case GAME_ABANDONED:
           return "GAME_ABANDONED";
+        case COOLDOWN:
+          return "COOLDOWN";
         default:
           return "UNKNOWN";
       }
@@ -134,9 +137,8 @@ class NaraEntry {
     }
 
     void abandonWeirdGame() {
-      setStatus(GAME_ABANDONED);
+      setStatus(COOLDOWN);
       resetGame();
-      setLog(String("uh-oh! ") + String(nodeNum, HEX));
     }
 
   protected:

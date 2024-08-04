@@ -28,7 +28,12 @@ bool NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_Nar
 }
 
 void NaraEntry::acceptGame(meshtastic_NaraMessage* nm) {
-  if(status != GAME_INVITE_SENT) resetGame();
+  // if we're not expecting a new game, something went wrong
+  if(isGameInProgress() || (nm->type == meshtastic_NaraMessage_MessageType_GAME_ACCEPT && status != GAME_INVITE_SENT)) {
+    LOG_WARN("NARA won't accept game from 0x%0x. Message type %d. We're in status=%s\n", nodeNum, nm->type, getStatusString().c_str());
+    abandonWeirdGame();
+    return;
+  }
 
   strncpy(theirText, nm->haiku.text, sizeof(theirText) - 1);
   theirText[sizeof(theirText) - 1] = '\0';
@@ -68,7 +73,7 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
 
   switch(status) {
     case UNCONTACTED:
-      // setLog("uncontacted");
+      resetGame();
       break;
     case GAME_INVITE_SENT:
       if(nodeDB->getNodeNum() < nodeNum) {
@@ -123,7 +128,10 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       drawCount++;
       break;
     case GAME_ABANDONED:
-      //setLog(String(nodeNum, HEX) + " GHOSTED us");
+      setLog(nodeName() + " GHOSTED us");
+      break;
+    case COOLDOWN:
+      setLog(String("uh-oh! ") + String(nodeNum, HEX));
       break;
   }
 
@@ -131,6 +139,11 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
 }
 
 int NaraEntry::processNextStep() {
+  if (status == COOLDOWN) {
+    if(millis() - lastInteraction > 60000) setStatus(UNCONTACTED);
+    return 0;
+  }
+
   if (status == UNCONTACTED || status == GAME_INVITE_RECEIVED) {
     return startGame();
   }
@@ -170,7 +183,6 @@ int NaraEntry::checkDeadlines() {
     return random(5 * 1000, 20 * 1000);
   } else if(isGameInProgress() && isGhostTimeExceeded) {
     setStatus(GAME_ABANDONED);
-    setLog(nodeName() + " GHOSTED us");
     return 1;
   }
 
