@@ -31,6 +31,7 @@ class NaraEntry {
     int winCount = 0;
     int loseCount = 0;
     int drawCount = 0;
+    int gameCount = 0;
     bool inviteSent = false;
 
     NaraEntry() : lastInteraction(0), nodeNum(0), status(UNCONTACTED) {}
@@ -51,6 +52,7 @@ class NaraEntry {
     bool sendGameInvite(NodeNum dest, char* haikuText);
     bool sendGameAccept(NodeNum dest, char* haikuText);
     bool sendGameMove(NodeNum dest, char* haikuText, int signature);
+    bool lowPowerMode();
 
     int getPoints() {
       int invitePoints = inviteSent ? 1 : 0;

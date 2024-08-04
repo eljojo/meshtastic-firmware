@@ -1,6 +1,7 @@
 #include "NaraEntry.h"
 #include "NaraModule.h"
 #include "ProtobufModule.h"
+#include "PowerStatus.h"
 
 #define NUM_ZEROES 4                    // for hashcash
 #define HASH_TURN_SIZE 1000             // size of hashcash turn before yielding thread
@@ -99,6 +100,7 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       break;
     case GAME_CHECKING_WHO_WON:
       setLog("checking who won...");
+      gameCount++;
       break;
     case GAME_WON:
       if(theirSignature == 0) {
@@ -159,6 +161,10 @@ int NaraEntry::checkDeadlines() {
   }
 
   if ((isGameDrawOrAbandoned && isRetryTimeExceeded) || (isGameWonOrLost && isPlayTimeExceeded)) {
+    if(lowPowerMode()) {
+      // LOG_DEBUG("NARA skipping retry game with %0x for now, we are in low power mode\n", nodeNum);
+      return 0;
+    }
     setStatus(UNCONTACTED);
     setLog("will challenge soon!");
     return random(5 * 1000, 20 * 1000);
@@ -174,6 +180,11 @@ int NaraEntry::checkDeadlines() {
 int NaraEntry::startGame() {
   if(naraModule->gamesInProgress() > 0) { // only play one game at a time
     LOG_DEBUG("NARA skipping game with %0x for now, we are already playing another game\n", nodeNum);
+    return 0;
+  }
+
+  if(lowPowerMode() && gameCount > 0) {
+    // LOG_DEBUG("NARA skipping new game with %0x for now, we are in low power mode\n", nodeNum);
     return 0;
   }
 
@@ -248,5 +259,12 @@ String NaraEntry::nodeName() {
     otherNodeName = String(nodeNum, HEX);
   }
   return otherNodeName;
+}
+
+bool NaraEntry::lowPowerMode() {
+  if(powerStatus->getHasUSB()) return false;
+  if(powerStatus->getBatteryChargePercent() > 50) return false;
+
+  return true;
 }
 
