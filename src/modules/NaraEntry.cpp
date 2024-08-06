@@ -70,7 +70,7 @@ void NaraEntry::processOtherTurn(meshtastic_NaraMessage* nm) {
     } else if (status == GAME_INVITE_SENT) {
       if (fastForwardGameFromTurn(nm->haiku.text)) {
         LOG_INFO("NARA Fast-forward game turn from 0x%0x after missing the game accept. Will switch on next iteration.\n", nodeNum);
-        setStatus(GAME_ACCEPTED);
+        setStatus(GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US);
       } else {
         LOG_WARN("NARA Couldn't Fast-forward game turn from 0x%0x after missing the game accept.\n", nodeNum);
         abandonWeirdGame();
