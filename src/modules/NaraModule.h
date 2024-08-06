@@ -22,6 +22,7 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
     void setLog(String log);
     bool handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *r) override;
     bool sendHaiku(NodeNum dest, char* haikuText, _meshtastic_NaraMessage_MessageType messageType, int signature);
+    bool sendHello(NodeNum dest, _meshtastic_NaraMessage_Stats stats);
     int gamesInProgress();
 
     String getShortMessage();
@@ -29,6 +30,7 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
 
   protected:
     bool firstTime = 1;
+    bool sentHello = false;
     virtual int32_t runOnce() override;
 
     int nodeCount = 0;
@@ -38,7 +40,6 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
 
     String getLongMessage();
 
-    String hashMessage;
     String screenLog = "";
     String screenTitle = "";
     String closestNodes;

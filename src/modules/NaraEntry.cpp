@@ -2,6 +2,7 @@
 #include "NaraModule.h"
 #include "ProtobufModule.h"
 #include "PowerStatus.h"
+#include "mesh/generated/meshtastic/nara.pb.h"
 
 #define NUM_ZEROES 4                    // for hashcash
 #define HASH_TURN_SIZE 1000             // size of hashcash turn before yielding thread
@@ -13,11 +14,12 @@
 
 bool NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm) {
   if(nm->type == meshtastic_NaraMessage_MessageType_GAME_INVITE || nm->type == meshtastic_NaraMessage_MessageType_GAME_ACCEPT) {
-    acceptGame(nm);
-    return true;
+    return acceptGame(nm);
   } else if(nm->type == meshtastic_NaraMessage_MessageType_GAME_TURN) {
     processOtherTurn(nm);
     return true;
+  } else if(nm->type == meshtastic_NaraMessage_MessageType_HELLO) {
+    return processHello(mp, nm);
   } else {
     LOG_WARN("NARA Received unexpected message from 0x%0x, type=%d. We're in status=%s\n", nodeNum, nm->type, getStatusString().c_str());
     if(isGameInProgress()) {
@@ -33,7 +35,7 @@ void NaraEntry::acceptGame(meshtastic_NaraMessage* nm) {
   if(isGameInProgress() || (nm->type == meshtastic_NaraMessage_MessageType_GAME_ACCEPT && status != GAME_INVITE_SENT)) {
     LOG_WARN("NARA won't accept game from 0x%0x. Message type %d. We're in status=%s\n", nodeNum, nm->type, getStatusString().c_str());
     abandonWeirdGame();
-    return;
+    return false;
   }
 
   if(status == GAME_INVITE_SENT && nm->type == meshtastic_NaraMessage_MessageType_GAME_INVITE) {
@@ -49,6 +51,7 @@ void NaraEntry::acceptGame(meshtastic_NaraMessage* nm) {
   } else {
     setStatus(GAME_INVITE_RECEIVED);
   }
+  return true;
 }
 
 void NaraEntry::processOtherTurn(meshtastic_NaraMessage* nm) {
@@ -71,6 +74,34 @@ void NaraEntry::processOtherTurn(meshtastic_NaraMessage* nm) {
       }
       abandonWeirdGame();
     }
+}
+
+bool NaraEntry::processHello(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm) {
+    NodeNum localNodeNum = nodeDB->getNodeNum();
+    if(mp.from == localNodeNum) return false; // ignore our own hello
+
+    if(mp.to == NODENUM_BROADCAST) { // received request for hello, let's send what we have
+      _meshtastic_NaraMessage_Stats stats = {firstSeen, lastGameTime, winCount, loseCount, drawCount};
+      naraModule->sendHello(mp.from, stats);
+      setLog("waved to " + nodeName());
+
+      if(status == COOLDOWN) setStatus(REMATCH);
+      if(isGameInProgress()) setStatus(GAME_ABANDONED);
+
+      return true;
+    }
+
+    if (mp.to != localNodeNum || !wantsHello || !nm->has_stats) {
+      LOG_WARN("NARA Received unrequested hello from 0x%0x.\n", mp.from);
+      return false;
+    }
+
+    wantsHello = false;
+    setStatsFromHello(nm);
+
+    setLog(nodeName() + " waved back");
+    if(!isGameInProgress()) setStatus(REMATCH);
+    return true;
 }
 
 void NaraEntry::setStatus(NaraEntryStatus status) {
@@ -120,6 +151,7 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
     case GAME_CHECKING_WHO_WON:
       setLog("checking who won...");
       gameCount++;
+      this->lastGameTime = getValidTime(RTCQuality::RTCQualityDevice, false);
       break;
     case GAME_WON:
       if(theirSignature == 0) {
@@ -157,6 +189,8 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
 }
 
 int NaraEntry::processNextStep() {
+  if(firstSeen == 0) firstSeen = getValidTime(RTCQuality::RTCQualityDevice, false);
+
   if(cooldownUntil > 0 && millis() < cooldownUntil) {
     return 0;
   }

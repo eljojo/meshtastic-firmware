@@ -5,6 +5,7 @@
 #include "main.h"
 #include "graphics/ScreenFonts.h"
 #include "CryptoEngine.h"
+#include "mesh/generated/meshtastic/nara.pb.h"
 
 #include <assert.h>
 #include <vector>
@@ -19,18 +20,20 @@ NaraModule *naraModule;
 
 bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *nm)
 {
-  LOG_INFO(
-      "NARA Received Haiku from=0x%0x, id=0x%0x, text=\"%s\", signature=%d, msg_type=%d\n",
-      mp.from, mp.id, nm->haiku.text, nm->haiku.signature, nm->type
-  );
+  if(nm->has_haiku) {
+    LOG_INFO(
+        "NARA Received Haiku from=0x%0x, id=0x%0x, text=\"%s\", signature=%d, msg_type=%d\n",
+        mp.from, mp.id, nm->haiku.text, nm->haiku.signature, nm->type
+        );
 
-  if (nm->haiku.signature > 0) {
-    if (crypto->checkHashcash(nm->haiku.text, nm->haiku.signature, NUM_ZEROES)) {
-      LOG_DEBUG("NARA Haiku Signature verified\n");
-    } else {
-      LOG_WARN("NARA Haiku Signature verification failed\n");
-      setLog("received invalid haiku");
-      return true; // ignore this message
+    if (nm->haiku.signature > 0) {
+      if (crypto->checkHashcash(nm->haiku.text, nm->haiku.signature, NUM_ZEROES)) {
+        LOG_DEBUG("NARA Haiku Signature verified\n");
+      } else {
+        LOG_WARN("NARA Haiku Signature verification failed\n");
+        setLog("received invalid haiku");
+        return true; // ignore this message
+      }
     }
   }
 
@@ -146,10 +149,15 @@ int32_t NaraModule::runOnce()
     // int signature = crypto->performHashcash(owner.long_name, NUM_ZEROES);
     // hashMessage = crypto->getHashString(owner.long_name, signature);
     // LOG_INFO("found hash for \"%s\": %s\n",owner.long_name, hashMessage.c_str());
-    hashMessage = String("Hello ") + String(owner.long_name);
 
     screenLog = String("Hello ") + String(owner.long_name);
-    return random(5 * 1000, 20 * 1000); // run again in 5-20 seconds
+    return 5000;
+  }
+
+  if(!sentHello) {
+    sendHello(NODENUM_BROADCAST, meshtastic_NaraMessage_Stats_init_default);
+    sentHello = true;
+    return 10000;
   }
 
   updateNodeCount();
@@ -216,6 +224,22 @@ bool NaraModule::sendHaiku(NodeNum dest, char* haikuText, _meshtastic_NaraMessag
   p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
 
   LOG_INFO("NARA Sending haiku to=0x%0x, id=0x%0x, haiku_text=\"%s\",haiku_signature=%d,msg_type=%d\n", p->to, p->id, nm.haiku.text, nm.haiku.signature, nm.type);
+  service.sendToMesh(p, RX_SRC_LOCAL, true);
+
+  return true;
+}
+
+bool NaraModule::sendHello(NodeNum dest, _meshtastic_NaraMessage_Stats stats) {
+  meshtastic_NaraMessage nm = meshtastic_NaraMessage_init_default;
+  nm.type = meshtastic_NaraMessage_MessageType_HELLO;
+  nm.has_stats = true;
+  nm.stats = stats;
+
+  meshtastic_MeshPacket *p = allocDataProtobuf(nm);
+  p->to = dest;
+  p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
+
+  LOG_INFO("NARA Sending hello to=0x%0x, id=0x%0x\n", p->to, p->id);
   service.sendToMesh(p, RX_SRC_LOCAL, true);
 
   return true;

@@ -3,6 +3,7 @@
 #include "mesh/generated/meshtastic/nara.pb.h"
 #include "ProtobufModule.h"
 #include "MeshService.h"
+#include "gps/RTC.h"
 
 enum NaraEntryStatus {
   UNCONTACTED,
@@ -30,12 +31,15 @@ class NaraEntry {
     char theirText[32];
     uint32_t ourSignature;
     uint32_t theirSignature;
+    uint32_t firstSeen = 0;
+    uint32_t lastGameTime = 0;
     int lastSignatureCounter;
-    int winCount = 0;
-    int loseCount = 0;
-    int drawCount = 0;
-    int gameCount = 0;
+    uint32_t winCount = 0;
+    uint32_t loseCount = 0;
+    uint32_t drawCount = 0;
+    uint32_t gameCount = 0;
     bool inviteSent = false;
+    bool wantsHello = true;
 
     NaraEntry() : lastInteraction(0), nodeNum(0), status(UNCONTACTED) {}
 
@@ -45,6 +49,8 @@ class NaraEntry {
       this->lastInteraction = millis(); // or use time(nullptr) for actual time
       screenLog = "";
       resetGame();
+
+      this->firstSeen = getValidTime(RTCQuality::RTCQualityDevice, false);
     }
 
     bool handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm);
@@ -78,6 +84,7 @@ class NaraEntry {
     int checkDeadlines();
     void acceptGame(meshtastic_NaraMessage* nm);
     void processOtherTurn(meshtastic_NaraMessage* nm);
+    bool processHello(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm);
     void setLog(String log);
 
     bool isGameInProgress() {
@@ -171,6 +178,16 @@ class NaraEntry {
       } else {
         setStatus(GAME_LOST);
       }
+    }
+
+    void setStatsFromHello(const meshtastic_NaraMessage* nm) {
+      if(nm->stats.firstSeen < firstSeen || firstSeen == 0) firstSeen = nm->stats.firstSeen;
+      lastGameTime = nm->stats.lastGame;
+      drawCount = nm->stats.drawCount;
+      loseCount = nm->stats.winCount; // flip these two, since they're from the other node's perspective
+      winCount = nm->stats.loseCount;
+      gameCount = drawCount + winCount + loseCount;
+      LOG_INFO("NARA Received hello from 0x%0x, stats: firstSeen=%d, lastGameTime=%d, winCount=%d, loseCount=%d, drawCount=%d\n", nodeNum, firstSeen, lastGameTime, winCount, loseCount, drawCount);
     }
 
     void abandonWeirdGame() {
