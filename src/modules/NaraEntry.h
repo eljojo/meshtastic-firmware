@@ -135,7 +135,7 @@ class NaraEntry {
       } else if(status == GAME_INVITE_RECEIVED || isGameInProgress() || gameJustEnded()) {
         return "Battle " + nodeName();
       } else if (status == COOLDOWN) {
-        return "backing off... " + nodeName();
+        return "backing off " + nodeName() + "...";
       } else {
         return "";
       }
@@ -143,9 +143,9 @@ class NaraEntry {
 
     int getStatusPriority() {
       switch(status) {
-        case COOLDOWN: case UNCONTACTED:
+        case UNCONTACTED:
           return 0;
-        case GAME_INVITE_SENT:
+        case GAME_INVITE_SENT: case COOLDOWN:
           return 1;
         case GAME_INVITE_RECEIVED: case REMATCH:
           return 2;

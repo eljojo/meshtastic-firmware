@@ -36,6 +36,11 @@ void NaraEntry::acceptGame(meshtastic_NaraMessage* nm) {
     return;
   }
 
+  if(status == GAME_INVITE_SENT && nm->type == meshtastic_NaraMessage_MessageType_GAME_INVITE) {
+    LOG_INFO("NARA Received game invite from 0x%0x, but we had already invited them. Throwing away our game and playing theirs...\n", nodeNum);
+    resetGame();
+  }
+
   strncpy(theirText, nm->haiku.text, sizeof(theirText) - 1);
   theirText[sizeof(theirText) - 1] = '\0';
 
@@ -158,7 +163,7 @@ int NaraEntry::processNextStep() {
 
   if (status == COOLDOWN) {
     if(millis() - lastInteraction > 60000) setStatus(UNCONTACTED);
-    return 0;
+    return 1; // block other interactions, also so title is shown
   }
 
   if (status == UNCONTACTED || status == GAME_INVITE_RECEIVED || status == REMATCH) {
@@ -173,8 +178,7 @@ int NaraEntry::processNextStep() {
   if(deadlineResult > 0) return deadlineResult;
 
   if((status == GAME_INVITE_SENT && interactedRecently()) || isGameInProgress() || gameJustEnded()) {
-    // if we just sent an invite or finished a game, we linger a lil longer on this naraEntry
-    return 1; // consider "an action done", so we don't move to the next NaraEntry
+    return 1; // consider "an action done", also so title is shown
   }
 
   return 0;
