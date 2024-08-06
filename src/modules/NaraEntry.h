@@ -61,6 +61,7 @@ class NaraEntry {
     bool sendGameInvite(NodeNum dest, char* haikuText);
     bool sendGameAccept(NodeNum dest, char* haikuText);
     bool sendGameMove(NodeNum dest, char* haikuText, int signature);
+    bool fastForwardGameFromTurn(char* haikuText);
     bool lowPowerMode();
 
     int getPoints() {
@@ -82,10 +83,11 @@ class NaraEntry {
     int startGame();
     int playGameTurn();
     int checkDeadlines();
-    void acceptGame(meshtastic_NaraMessage* nm);
+    bool acceptGame(meshtastic_NaraMessage* nm);
     void processOtherTurn(meshtastic_NaraMessage* nm);
     bool processHello(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm);
     void setLog(String log);
+    void attemptReSendGameMove();
 
     bool isGameInProgress() {
       return status == GAME_ACCEPTED || status == GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US || status == GAME_WAITING_FOR_OPPONENT_TURN || status == GAME_CHECKING_WHO_WON;

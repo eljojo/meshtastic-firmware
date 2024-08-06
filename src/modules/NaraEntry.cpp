@@ -30,7 +30,7 @@ bool NaraEntry::handleMeshPacket(const meshtastic_MeshPacket& mp, meshtastic_Nar
   return false;
 }
 
-void NaraEntry::acceptGame(meshtastic_NaraMessage* nm) {
+bool NaraEntry::acceptGame(meshtastic_NaraMessage* nm) {
   // if we're not expecting a new game, something went wrong
   if(isGameInProgress() || (nm->type == meshtastic_NaraMessage_MessageType_GAME_ACCEPT && status != GAME_INVITE_SENT)) {
     LOG_WARN("NARA won't accept game from 0x%0x. Message type %d. We're in status=%s\n", nodeNum, nm->type, getStatusString().c_str());
@@ -67,13 +67,48 @@ void NaraEntry::processOtherTurn(meshtastic_NaraMessage* nm) {
     } else if(status == GAME_ACCEPTED) {
       LOG_INFO("NARA Received game turn from 0x%0x before we sent ours. Will switch on next iteration.\n", nodeNum);
       setStatus(GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US);
-    } else {
-      LOG_WARN("NARA Received game turn from 0x%0x, but we're not waiting for it. We're in status=%s\n", nodeNum, getStatusString().c_str());
-      if(status == GAME_INVITE_SENT) {
-        // looks like we missed the packet when the game was accepted, we could still try decoding the other nara's move and continue playing
+    } else if (status == GAME_INVITE_SENT) {
+      if (fastForwardGameFromTurn(nm->haiku.text)) {
+        LOG_INFO("NARA Fast-forward game turn from 0x%0x after missing the game accept. Will switch on next iteration.\n", nodeNum);
+        setStatus(GAME_ACCEPTED);
+      } else {
+        LOG_WARN("NARA Couldn't Fast-forward game turn from 0x%0x after missing the game accept.\n", nodeNum);
+        abandonWeirdGame();
       }
+    } else if(isGameInProgress()) {
+      LOG_WARN("NARA Received game turn from 0x%0x, but we're not waiting for it. We're in status=%s\n", nodeNum, getStatusString().c_str());
       abandonWeirdGame();
     }
+}
+
+bool NaraEntry::fastForwardGameFromTurn(char* haikuText) {
+  NodeNum localNodeNum = nodeDB->getNodeNum();
+  std::string haikuTextStr = haikuText;
+
+  size_t firstSlash = haikuTextStr.find('/');
+  size_t secondSlash = haikuTextStr.find('/', firstSlash + 1);
+  std::string tempTheirText;
+  std::string tempOurSupposedText;
+
+  if (localNodeNum < nodeNum) {
+    tempTheirText = haikuTextStr.substr(firstSlash + 1, secondSlash - firstSlash - 1); // extract text from haiku between first and second /
+    tempOurSupposedText = haikuTextStr.substr(0, firstSlash); // extract text from haiku until first /
+  } else {
+    tempTheirText = haikuTextStr.substr(0, firstSlash); // extract text from haiku until first /
+    tempOurSupposedText = haikuTextStr.substr(firstSlash + 1, secondSlash - firstSlash - 1); // extract text from haiku between first and second /
+  }
+  LOG_DEBUG("NARA tempTheirText=%s, tempOurSupposedText=%s, ourText=%s\n", tempTheirText.c_str(), tempOurSupposedText.c_str(), ourText);
+
+  // check if tempOurSupposedText is the same as ourText
+  if (tempOurSupposedText == ourText) {
+    strncpy(theirText, tempTheirText.c_str(), sizeof(theirText) - 1);
+    theirText[sizeof(theirText) - 1] = '\0';
+    strncpy(ourText, tempOurSupposedText.c_str(), sizeof(ourText) - 1);
+    ourText[sizeof(ourText) - 1] = '\0';
+    return true;
+  } else {
+    return false;
+  }
 }
 
 bool NaraEntry::processHello(const meshtastic_MeshPacket& mp, meshtastic_NaraMessage* nm) {
@@ -242,11 +277,29 @@ int NaraEntry::checkDeadlines() {
     //addCooldownPeriod();
     return 1;
   } else if(status == GAME_WAITING_FOR_OPPONENT_TURN && now - lastInteraction > GAME_GHOST_TTL) { // only check for abandoned once we've played our turn
+    attemptReSendGameMove();
     setStatus(GAME_ABANDONED);
     return 1;
   }
 
   return 0;
+}
+
+void NaraEntry::attemptReSendGameMove() {
+  if(ourSignature == 0) return;
+
+  LOG_INFO("NARA node %0x is in status %s, but we haven't heard from the other node in a while. Resending our move before abandoning.\n", nodeNum, getStatusString().c_str());
+
+  char haikuText[128];
+  NodeNum localNodeNum = nodeDB->getNodeNum();
+
+  if(localNodeNum < nodeNum) {
+    snprintf(haikuText, sizeof(haikuText), "%s/%s/%0x", ourText, theirText, localNodeNum);
+  } else {
+    snprintf(haikuText, sizeof(haikuText), "%s/%s/%0x", theirText, ourText, localNodeNum);
+  }
+
+  sendGameMove(nodeNum, haikuText, ourSignature);
 }
 
 int NaraEntry::startGame() {
