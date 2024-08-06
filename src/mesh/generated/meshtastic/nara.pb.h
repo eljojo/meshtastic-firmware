@@ -14,7 +14,9 @@ typedef enum _meshtastic_NaraMessage_MessageType {
     meshtastic_NaraMessage_MessageType_HELLO = 0,
     meshtastic_NaraMessage_MessageType_GAME_INVITE = 1,
     meshtastic_NaraMessage_MessageType_GAME_ACCEPT = 2,
-    meshtastic_NaraMessage_MessageType_GAME_TURN = 3
+    meshtastic_NaraMessage_MessageType_GAME_TURN = 3,
+    meshtastic_NaraMessage_MessageType_GAME_REJECT = 4,
+    meshtastic_NaraMessage_MessageType_GAME_ABORT = 5
 } meshtastic_NaraMessage_MessageType;
 
 /* Struct definitions */
@@ -23,10 +25,20 @@ typedef struct _meshtastic_NaraMessage_Haiku {
     uint32_t signature; /* integer that helps derive good-looking SHA256 signature */
 } meshtastic_NaraMessage_Haiku;
 
+typedef struct _meshtastic_NaraMessage_Stats {
+    uint32_t firstSeen;
+    uint32_t lastGame;
+    uint32_t winCount;
+    uint32_t loseCount;
+    uint32_t drawCount;
+} meshtastic_NaraMessage_Stats;
+
 typedef struct _meshtastic_NaraMessage {
     meshtastic_NaraMessage_MessageType type;
     bool has_haiku;
     meshtastic_NaraMessage_Haiku haiku;
+    bool has_stats;
+    meshtastic_NaraMessage_Stats stats;
 } meshtastic_NaraMessage;
 
 
@@ -36,32 +48,43 @@ extern "C" {
 
 /* Helper constants for enums */
 #define _meshtastic_NaraMessage_MessageType_MIN meshtastic_NaraMessage_MessageType_HELLO
-#define _meshtastic_NaraMessage_MessageType_MAX meshtastic_NaraMessage_MessageType_GAME_TURN
-#define _meshtastic_NaraMessage_MessageType_ARRAYSIZE ((meshtastic_NaraMessage_MessageType)(meshtastic_NaraMessage_MessageType_GAME_TURN+1))
+#define _meshtastic_NaraMessage_MessageType_MAX meshtastic_NaraMessage_MessageType_GAME_ABORT
+#define _meshtastic_NaraMessage_MessageType_ARRAYSIZE ((meshtastic_NaraMessage_MessageType)(meshtastic_NaraMessage_MessageType_GAME_ABORT+1))
 
 #define meshtastic_NaraMessage_type_ENUMTYPE meshtastic_NaraMessage_MessageType
 
 
 
+
 /* Initializer values for message structs */
-#define meshtastic_NaraMessage_init_default      {_meshtastic_NaraMessage_MessageType_MIN, false, meshtastic_NaraMessage_Haiku_init_default}
+#define meshtastic_NaraMessage_init_default      {_meshtastic_NaraMessage_MessageType_MIN, false, meshtastic_NaraMessage_Haiku_init_default, false, meshtastic_NaraMessage_Stats_init_default}
 #define meshtastic_NaraMessage_Haiku_init_default {"", 0}
-#define meshtastic_NaraMessage_init_zero         {_meshtastic_NaraMessage_MessageType_MIN, false, meshtastic_NaraMessage_Haiku_init_zero}
+#define meshtastic_NaraMessage_Stats_init_default {0, 0, 0, 0, 0}
+#define meshtastic_NaraMessage_init_zero         {_meshtastic_NaraMessage_MessageType_MIN, false, meshtastic_NaraMessage_Haiku_init_zero, false, meshtastic_NaraMessage_Stats_init_zero}
 #define meshtastic_NaraMessage_Haiku_init_zero   {"", 0}
+#define meshtastic_NaraMessage_Stats_init_zero   {0, 0, 0, 0, 0}
 
 /* Field tags (for use in manual encoding/decoding) */
 #define meshtastic_NaraMessage_Haiku_text_tag    1
 #define meshtastic_NaraMessage_Haiku_signature_tag 2
+#define meshtastic_NaraMessage_Stats_firstSeen_tag 1
+#define meshtastic_NaraMessage_Stats_lastGame_tag 2
+#define meshtastic_NaraMessage_Stats_winCount_tag 3
+#define meshtastic_NaraMessage_Stats_loseCount_tag 4
+#define meshtastic_NaraMessage_Stats_drawCount_tag 5
 #define meshtastic_NaraMessage_type_tag          1
 #define meshtastic_NaraMessage_haiku_tag         2
+#define meshtastic_NaraMessage_stats_tag         3
 
 /* Struct field encoding specification for nanopb */
 #define meshtastic_NaraMessage_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, UENUM,    type,              1) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  haiku,             2)
+X(a, STATIC,   OPTIONAL, MESSAGE,  haiku,             2) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  stats,             3)
 #define meshtastic_NaraMessage_CALLBACK NULL
 #define meshtastic_NaraMessage_DEFAULT NULL
 #define meshtastic_NaraMessage_haiku_MSGTYPE meshtastic_NaraMessage_Haiku
+#define meshtastic_NaraMessage_stats_MSGTYPE meshtastic_NaraMessage_Stats
 
 #define meshtastic_NaraMessage_Haiku_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, STRING,   text,              1) \
@@ -69,17 +92,29 @@ X(a, STATIC,   SINGULAR, UINT32,   signature,         2)
 #define meshtastic_NaraMessage_Haiku_CALLBACK NULL
 #define meshtastic_NaraMessage_Haiku_DEFAULT NULL
 
+#define meshtastic_NaraMessage_Stats_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, UINT32,   firstSeen,         1) \
+X(a, STATIC,   SINGULAR, UINT32,   lastGame,          2) \
+X(a, STATIC,   SINGULAR, UINT32,   winCount,          3) \
+X(a, STATIC,   SINGULAR, UINT32,   loseCount,         4) \
+X(a, STATIC,   SINGULAR, UINT32,   drawCount,         5)
+#define meshtastic_NaraMessage_Stats_CALLBACK NULL
+#define meshtastic_NaraMessage_Stats_DEFAULT NULL
+
 extern const pb_msgdesc_t meshtastic_NaraMessage_msg;
 extern const pb_msgdesc_t meshtastic_NaraMessage_Haiku_msg;
+extern const pb_msgdesc_t meshtastic_NaraMessage_Stats_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
 #define meshtastic_NaraMessage_fields &meshtastic_NaraMessage_msg
 #define meshtastic_NaraMessage_Haiku_fields &meshtastic_NaraMessage_Haiku_msg
+#define meshtastic_NaraMessage_Stats_fields &meshtastic_NaraMessage_Stats_msg
 
 /* Maximum encoded size of messages (where known) */
 #define MESHTASTIC_MESHTASTIC_NARA_PB_H_MAX_SIZE meshtastic_NaraMessage_size
 #define meshtastic_NaraMessage_Haiku_size        136
-#define meshtastic_NaraMessage_size              141
+#define meshtastic_NaraMessage_Stats_size        30
+#define meshtastic_NaraMessage_size              173
 
 #ifdef __cplusplus
 } /* extern "C" */

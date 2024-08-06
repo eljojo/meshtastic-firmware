@@ -12,5 +12,8 @@ PB_BIND(meshtastic_NaraMessage, meshtastic_NaraMessage, AUTO)
 PB_BIND(meshtastic_NaraMessage_Haiku, meshtastic_NaraMessage_Haiku, AUTO)
 
 
+PB_BIND(meshtastic_NaraMessage_Stats, meshtastic_NaraMessage_Stats, AUTO)
+
+
 
 
