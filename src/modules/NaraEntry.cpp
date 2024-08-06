@@ -52,7 +52,7 @@ void NaraEntry::processOtherTurn(meshtastic_NaraMessage* nm) {
     // TODO: check if their text is the same as our text (minus node num)
     // we could be in either GAME_ACCEPTED or GAME_WAITING_FOR_OPPONENT_TURN
     // we only switch status if we haven't sent our turn yet
-    if(status == GAME_WAITING_FOR_OPPONENT_TURN) {
+    if(status == GAME_WAITING_FOR_OPPONENT_TURN || status == GAME_ABANDONED) {
       setStatus(GAME_CHECKING_WHO_WON);
       checkWhoWon();
       resetGame();
@@ -120,7 +120,7 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       if(theirSignature == 0) {
         setLog("they conceded, we win!");
       } else {
-        setLog("WON!      " + String(ourSignature) + " vs " + String(theirSignature));
+        setLog("WON!      " + String(ourSignature) + " < " + String(theirSignature));
       }
       winCount++;
       break;
@@ -128,7 +128,7 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       if(ourSignature == 0) {
         setLog("conceding, " + nodeName() + " wins");
       } else {
-        setLog("LOST!    " + String(ourSignature) + " vs " + String(theirSignature));
+        setLog("LOST!    " + String(ourSignature) + " > " + String(theirSignature));
       }
       loseCount++;
       break;
@@ -138,6 +138,10 @@ void NaraEntry::setStatus(NaraEntryStatus status) {
       break;
     case GAME_ABANDONED:
       setLog(nodeName() + " GHOSTED us");
+      break;
+    case REMATCH:
+      setLog("will rematch " + nodeName() + "!");
+      resetGame();
       break;
     case COOLDOWN:
       setLog(String("uh-oh! ") + String(nodeNum, HEX));
@@ -157,7 +161,7 @@ int NaraEntry::processNextStep() {
     return 0;
   }
 
-  if (status == UNCONTACTED || status == GAME_INVITE_RECEIVED) {
+  if (status == UNCONTACTED || status == GAME_INVITE_RECEIVED || status == REMATCH) {
     return startGame();
   }
 
@@ -178,25 +182,28 @@ int NaraEntry::processNextStep() {
 
 int NaraEntry::checkDeadlines() {
   uint32_t now = millis();
-  // don't spam logs
-  if(now - lastInteraction <= GAME_GHOST_TTL) {
+
+  if(interactedRecently()) { // don't spam logs
     LOG_DEBUG("node %0x is in status %s\n", nodeNum, getStatusString().c_str());
   }
 
   bool shouldChangeStatusDueToInactivity =
-    (status == GAME_ABANDONED && now - lastInteraction > DRAW_RETRY_TIME_MS) || // retry abandoned games in 5 seconds
-    (status == GAME_DRAW && now - lastInteraction > DRAW_RETRY_TIME_MS && nodeDB->getNodeNum() < nodeNum) || // retry in 5 seconds in case of draw, only one node retries
-    (status == GAME_LOST && now - lastInteraction > PLAY_EVERY_MS) || // losers ask for a rematch, every 2 minutes
-    (status == GAME_INVITE_SENT && now - lastInteraction > REINVITE_AFTER); // reinvite after 10 minutes
+    (status == GAME_ABANDONED && now - lastInteraction > GAME_GHOST_TTL) || // a minute after we've been ghosted, we attempt to rematch
+    (status == GAME_DRAW && now - lastInteraction > DRAW_RETRY_TIME_MS && nodeDB->getNodeNum() < nodeNum) || // only the one with the lower nodeNum retries the draw
+    (status == GAME_LOST && now - lastInteraction > PLAY_EVERY_MS) || // only losers ask for a rematch
+    (status == GAME_INVITE_SENT && now - lastInteraction > REINVITE_AFTER);
 
   if (shouldChangeStatusDueToInactivity) {
     if(lowPowerMode()) return 0;
-    setStatus(UNCONTACTED);
+    if(status == GAME_INVITE_SENT) {
+      setStatus(UNCONTACTED);
+    } else {
+      setStatus(REMATCH);
+    }
     LOG_DEBUG("NARA node %0x is in status %s for too long, tripped time check\n", nodeNum, getStatusString().c_str());
-    setLog("will challenge soon!");
     //addCooldownPeriod();
     return 1;
-  } else if(isGameInProgress() && now - lastInteraction > GAME_GHOST_TTL) {
+  } else if(status == GAME_WAITING_FOR_OPPONENT_TURN && now - lastInteraction > GAME_GHOST_TTL) { // only check for abandoned once we've played our turn
     setStatus(GAME_ABANDONED);
     return 1;
   }
@@ -218,12 +225,12 @@ int NaraEntry::startGame() {
   snprintf(ourText, sizeof(ourText), "%d", random(100, 999));
   ourText[31] = '\0';
 
-  if(status == UNCONTACTED) {
-    sendGameInvite(nodeNum, ourText);
-    setStatus(GAME_INVITE_SENT);
-  } else {
+  if(status == GAME_INVITE_RECEIVED) {
     sendGameAccept(nodeNum, ourText);
     setStatus(GAME_ACCEPTED);
+  } else {
+    sendGameInvite(nodeNum, ourText);
+    setStatus(GAME_INVITE_SENT);
   }
 
   return 1;

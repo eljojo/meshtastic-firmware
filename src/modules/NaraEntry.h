@@ -16,6 +16,7 @@ enum NaraEntryStatus {
   GAME_LOST,
   GAME_DRAW,
   GAME_ABANDONED,
+  REMATCH,
   COOLDOWN
 };
 
@@ -121,6 +122,8 @@ class NaraEntry {
           return "GAME_ABANDONED";
         case COOLDOWN:
           return "COOLDOWN";
+        case REMATCH:
+          return "REMATCH";
         default:
           return "UNKNOWN";
       }
@@ -144,7 +147,7 @@ class NaraEntry {
           return 0;
         case GAME_INVITE_SENT:
           return 1;
-        case GAME_INVITE_RECEIVED:
+        case GAME_INVITE_RECEIVED: case REMATCH:
           return 2;
         case GAME_ACCEPTED: case GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US: case GAME_WAITING_FOR_OPPONENT_TURN: case GAME_ABANDONED:
           return 3;
