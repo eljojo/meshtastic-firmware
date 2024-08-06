@@ -45,6 +45,8 @@ class NaraModule : private concurrency::OSThread, public ProtobufModule<meshtast
 
     std::map<NodeNum, NaraEntry> naraDatabase;
 
+    void setScreenTitleToNaraEntry(NaraEntry &entry);
+
 };
 
 extern NaraModule *naraModule;

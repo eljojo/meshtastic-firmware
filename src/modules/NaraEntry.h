@@ -84,11 +84,15 @@ class NaraEntry {
     }
 
     bool gameJustEnded() {
-      return (status == GAME_WON || status == GAME_LOST || status == GAME_DRAW) && millis() - lastInteraction < 30000;
+      return (status == GAME_WON || status == GAME_LOST || status == GAME_DRAW) && interactedRecently();
     }
 
     String getLog() {
       return screenLog;
+    }
+
+    bool interactedRecently() {
+      return millis() - lastInteraction < 30000;
     }
 
     String getStatusString() {
@@ -119,6 +123,35 @@ class NaraEntry {
           return "COOLDOWN";
         default:
           return "UNKNOWN";
+      }
+    }
+
+    String getTitle() {
+      if(status == GAME_INVITE_SENT) {
+        return "pinging " + nodeName();
+      } else if(status == GAME_INVITE_RECEIVED || isGameInProgress() || gameJustEnded()) {
+        return "Battle " + nodeName();
+      } else if (status == COOLDOWN) {
+        return "backing off... " + nodeName();
+      } else {
+        return "";
+      }
+    }
+
+    int getStatusPriority() {
+      switch(status) {
+        case COOLDOWN: case UNCONTACTED:
+          return 0;
+        case GAME_INVITE_SENT:
+          return 1;
+        case GAME_INVITE_RECEIVED:
+          return 2;
+        case GAME_ACCEPTED: case GAME_ACCEPTED_AND_OPPONENT_IS_WAITING_FOR_US: case GAME_WAITING_FOR_OPPONENT_TURN: case GAME_ABANDONED:
+          return 3;
+        case GAME_CHECKING_WHO_WON: case GAME_WON: case GAME_LOST: case GAME_DRAW:
+          return 4;
+        default:
+          return 0;
       }
     }
 

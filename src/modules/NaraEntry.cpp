@@ -165,40 +165,40 @@ int NaraEntry::processNextStep() {
     return playGameTurn();
   }
 
-  if((status == GAME_INVITE_SENT || gameJustEnded()) && millis() - lastInteraction < 30000) {
+  int deadlineResult = checkDeadlines();
+  if(deadlineResult > 0) return deadlineResult;
+
+  if((status == GAME_INVITE_SENT && interactedRecently()) || isGameInProgress() || gameJustEnded()) {
     // if we just sent an invite or finished a game, we linger a lil longer on this naraEntry
     return 1; // consider "an action done", so we don't move to the next NaraEntry
   }
 
-  return checkDeadlines();
+  return 0;
 }
 
 int NaraEntry::checkDeadlines() {
   uint32_t now = millis();
-  bool isGameDrawOrAbandoned = (status == GAME_DRAW || status == GAME_ABANDONED);
-  bool isGameWonOrLost = (status == GAME_WON || status == GAME_LOST);
-
   // don't spam logs
   if(now - lastInteraction <= GAME_GHOST_TTL) {
     LOG_DEBUG("node %0x is in status %s\n", nodeNum, getStatusString().c_str());
   }
 
-  if ((isGameDrawOrAbandoned && now - lastInteraction > DRAW_RETRY_TIME_MS) || (isGameWonOrLost && now - lastInteraction > PLAY_EVERY_MS)) {
-    if(lowPowerMode()) {
-      // LOG_DEBUG("NARA skipping retry game with %0x for now, we are in low power mode\n", nodeNum);
-      return 0;
-    }
+  bool shouldChangeStatusDueToInactivity =
+    (status == GAME_ABANDONED && now - lastInteraction > DRAW_RETRY_TIME_MS) || // retry abandoned games in 5 seconds
+    (status == GAME_DRAW && now - lastInteraction > DRAW_RETRY_TIME_MS && nodeDB->getNodeNum() < nodeNum) || // retry in 5 seconds in case of draw, only one node retries
+    (status == GAME_LOST && now - lastInteraction > PLAY_EVERY_MS) || // losers ask for a rematch, every 2 minutes
+    (status == GAME_INVITE_SENT && now - lastInteraction > REINVITE_AFTER); // reinvite after 10 minutes
+
+  if (shouldChangeStatusDueToInactivity) {
+    if(lowPowerMode()) return 0;
     setStatus(UNCONTACTED);
+    LOG_DEBUG("NARA node %0x is in status %s for too long, tripped time check\n", nodeNum, getStatusString().c_str());
     setLog("will challenge soon!");
-    addCooldownPeriod();
+    //addCooldownPeriod();
     return 1;
   } else if(isGameInProgress() && now - lastInteraction > GAME_GHOST_TTL) {
     setStatus(GAME_ABANDONED);
     return 1;
-  } else if(status == GAME_INVITE_SENT && now - lastInteraction > REINVITE_AFTER) {
-    LOG_INFO("NARA node %0x is in status %s for too long, abandoning\n", nodeNum, getStatusString().c_str());
-    setStatus(UNCONTACTED);
-    return 0;
   }
 
   return 0;
@@ -211,7 +211,7 @@ int NaraEntry::startGame() {
   }
 
   if(lowPowerMode() && gameCount > 0) {
-    // LOG_DEBUG("NARA skipping new game with %0x for now, we are in low power mode\n", nodeNum);
+    setLog("skipping game, low power mode");
     return 0;
   }
 

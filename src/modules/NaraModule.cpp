@@ -43,8 +43,7 @@ bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtas
   bool didAction = entry.handleMeshPacket(mp, nm);
 
   if(didAction) {
-    screenTitle = "Battle " + entry.nodeName();
-    screenLog = entry.getLog();
+    setScreenTitleToNaraEntry(entry);
   }
 
   return true;
@@ -88,6 +87,12 @@ void NaraModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int1
   return;
 }
 
+void NaraModule::setScreenTitleToNaraEntry(NaraEntry &entry)
+{
+  screenTitle = entry.getTitle();
+  screenLog = entry.getLog();
+}
+
 void NaraModule::setLog(String log)
 {
   LOG_INFO("%s\n", log.c_str());
@@ -103,17 +108,22 @@ int NaraModule::messageNextNode()
 {
   bool idle = true;
 
+  // create list of nara entries sorted by priority highest to lowest
+  std::vector<std::pair<int, NaraEntry*>> sortedEntries;
   for (auto& entry : naraDatabase) {
     auto& naraEntry = entry.second;
+    sortedEntries.emplace_back(naraEntry.getStatusPriority(), &naraEntry);
+  }
+
+  std::sort(sortedEntries.begin(), sortedEntries.end(), [](const std::pair<int, NaraEntry*>& a, const std::pair<int, NaraEntry*>& b) {
+    return a.first > b.first;
+  });
+
+  for (const auto& entryPair : sortedEntries) {
+    auto& naraEntry = *entryPair.second;
     int entryResult = naraEntry.processNextStep();
-
-    if(naraEntry.isGameInProgress() || naraEntry.gameJustEnded()) {
-      idle = false;
-    }
-
     if(entryResult > 0) {
-      screenTitle = "Battle " + naraEntry.nodeName();
-      screenLog = naraEntry.getLog();
+      setScreenTitleToNaraEntry(naraEntry);
       idle = false;
       return entryResult;
     }
@@ -149,7 +159,7 @@ int32_t NaraModule::runOnce()
     return suggestedDelay;
   }
 
-  return random(5 * 1000, 10 * 1000); // run again in 5-10 seconds
+  return 5 * 1000; // run again in 5
 }
 
 // used for debugging
