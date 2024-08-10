@@ -124,6 +124,9 @@ int NaraModule::messageNextNode()
   }
 
   std::sort(sortedEntries.begin(), sortedEntries.end(), [](const std::pair<int, NaraEntry*>& a, const std::pair<int, NaraEntry*>& b) {
+      if (a.first == b.first) {
+        return a.second->lastInteraction > b.second->lastInteraction; // prefer the oldest interaction
+      }
     return a.first > b.first;
   });
 

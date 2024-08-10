@@ -115,6 +115,8 @@ bool NaraEntry::processHello(const meshtastic_MeshPacket& mp, meshtastic_NaraMes
     NodeNum localNodeNum = nodeDB->getNodeNum();
     if(mp.from == localNodeNum) return false; // ignore our own hello
 
+    lastInteraction = millis();
+
     if(mp.to == NODENUM_BROADCAST) { // received request for hello, let's send what we have
       _meshtastic_NaraMessage_Stats stats = {firstSeen, lastGameTime, winCount, loseCount, drawCount};
       naraModule->sendHello(mp.from, stats);
