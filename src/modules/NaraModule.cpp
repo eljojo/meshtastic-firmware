@@ -20,6 +20,11 @@ NaraModule *naraModule;
 
 bool NaraModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_NaraMessage *nm)
 {
+  if (mp.from == nodeDB->getNodeNum() || mp.via_mqtt) {
+    LOG_DEBUG("NARA Ignoring message from self or via MQTT\n");
+    return true;
+  }
+
   if(nm->has_haiku) {
     LOG_INFO(
         "NARA Received Haiku from=0x%0x, id=0x%0x, text=\"%s\", signature=%d, msg_type=%d\n",
