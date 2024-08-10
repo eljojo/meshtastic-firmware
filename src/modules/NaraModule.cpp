@@ -229,7 +229,7 @@ bool NaraModule::sendHaiku(NodeNum dest, char* haikuText, _meshtastic_NaraMessag
   p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
 
   LOG_INFO("NARA Sending haiku to=0x%0x, id=0x%0x, haiku_text=\"%s\",haiku_signature=%d,msg_type=%d\n", p->to, p->id, nm.haiku.text, nm.haiku.signature, nm.type);
-  service.sendToMesh(p, RX_SRC_LOCAL, true);
+  service->sendToMesh(p, RX_SRC_LOCAL, true);
 
   return true;
 }
@@ -245,7 +245,7 @@ bool NaraModule::sendHello(NodeNum dest, _meshtastic_NaraMessage_Stats stats) {
   p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
 
   LOG_INFO("NARA Sending hello to=0x%0x, id=0x%0x\n", p->to, p->id);
-  service.sendToMesh(p, RX_SRC_LOCAL, true);
+  service->sendToMesh(p, RX_SRC_LOCAL, true);
 
   return true;
 }
