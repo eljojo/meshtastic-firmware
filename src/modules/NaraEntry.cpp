@@ -3,6 +3,7 @@
 #include "ProtobufModule.h"
 #include "PowerStatus.h"
 #include "mesh/generated/meshtastic/nara.pb.h"
+#include "main.h" // for screen
 
 #define NUM_ZEROES 4                    // for hashcash
 #define HASH_TURN_SIZE 1000             // size of hashcash turn before yielding thread
@@ -314,6 +315,8 @@ int NaraEntry::startGame() {
     setLog("skipping game, low power mode");
     return 0;
   }
+
+  screen->setOn(true);
 
   snprintf(ourText, sizeof(ourText), "%d", random(100, 999));
   ourText[31] = '\0';
